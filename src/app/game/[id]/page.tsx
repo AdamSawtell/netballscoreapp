@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Game } from '@/types/game';
 import QRCode from 'qrcode';
@@ -14,9 +14,10 @@ export default function GameViewer() {
   const [error, setError] = useState('');
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [showShareSection, setShowShareSection] = useState(false);
-  // No timerRef needed - using server-side authoritative time
+  const [localTimeRemaining, setLocalTimeRemaining] = useState<number | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load game data - but don't overwrite local timer if it's running
+  // Load game data - sync with server but maintain smooth local countdown
   const loadGame = async () => {
     try {
       const response = await fetch(`/api/games/${gameId}`);
@@ -25,8 +26,27 @@ export default function GameViewer() {
       }
       const { game: serverGame } = await response.json();
       
-      // Use server data directly - server time is authoritative
-      setGame(serverGame);
+      // Update game state
+      setGame(prevGame => {
+        // If timer state changed (started/stopped), sync immediately
+        if (!prevGame || prevGame.isRunning !== serverGame.isRunning || prevGame.status !== serverGame.status) {
+          setLocalTimeRemaining(serverGame.timeRemaining);
+          return serverGame;
+        }
+        
+        // If timer is running, keep local countdown smooth but update scores
+        if (serverGame.isRunning && serverGame.status === 'live') {
+          return {
+            ...serverGame,
+            timeRemaining: localTimeRemaining !== null ? localTimeRemaining : serverGame.timeRemaining
+          };
+        }
+        
+        // Otherwise use server data
+        setLocalTimeRemaining(serverGame.timeRemaining);
+        return serverGame;
+      });
+      
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load game');
@@ -53,22 +73,58 @@ export default function GameViewer() {
     }
   };
 
+  // Local timer for smooth spectator countdown
+  useEffect(() => {
+    const shouldBeRunning = game?.isRunning && game?.status === 'live' && (localTimeRemaining || 0) > 0;
+    
+    if (shouldBeRunning && !timerRef.current) {
+      // Start local countdown
+      timerRef.current = setInterval(() => {
+        setLocalTimeRemaining(prevTime => {
+          if (prevTime === null || prevTime <= 0) {
+            if (timerRef.current) {
+              clearInterval(timerRef.current);
+              timerRef.current = null;
+            }
+            return 0;
+          }
+          return prevTime - 1;
+        });
+      }, 1000);
+    } else if (!shouldBeRunning && timerRef.current) {
+      // Stop local countdown
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [game?.isRunning, game?.status, localTimeRemaining]);
+
   // Auto-refresh game data every 3 seconds to get score updates
   useEffect(() => {
     loadGame();
     
     const interval = setInterval(() => {
-      // Always refresh to get score updates, but preserve timer state if running
+      // Refresh to get score updates and sync timer occasionally
       loadGame();
     }, 3000);
     
     return () => clearInterval(interval);
-  }, [gameId]); // Keep simple dependency
+  }, [gameId]);
 
-  // Server-side timer: No local countdown needed, server calculates authoritative time
-  // All devices sync to server time via API polling every 3 seconds
-
-  // No local timer cleanup needed - using server-side time
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
 
   // Format time display
   const formatTime = (seconds: number) => {
@@ -183,7 +239,7 @@ export default function GameViewer() {
           <div className="text-center border-t pt-6">
             <div className="text-sm text-gray-600 mb-2">Time Remaining</div>
             <div className="text-3xl md:text-5xl font-bold text-green-600 mb-2">
-              {formatTime(game.timeRemaining)}
+              {formatTime(localTimeRemaining !== null ? localTimeRemaining : game.timeRemaining)}
             </div>
             <div className="flex justify-center items-center space-x-2">
               <span className="text-sm text-gray-500">Quarter {game.currentQuarter}</span>
