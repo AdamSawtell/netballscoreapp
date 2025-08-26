@@ -56,6 +56,34 @@ const saveGamesToStorage = (games: Map<string, Game>) => {
 };
 
 export class GameStorage {
+  // Calculate server-side time remaining based on when timer started
+  static calculateServerTime(game: Game): Game {
+    if (!game.isRunning || !game.timerStartedAt || game.status !== 'live') {
+      return game;
+    }
+
+    const now = new Date();
+    const elapsedSeconds = Math.floor((now.getTime() - game.timerStartedAt.getTime()) / 1000);
+    const newTimeRemaining = Math.max(0, game.timeRemaining - elapsedSeconds);
+
+    // If time has run out, stop the timer
+    if (newTimeRemaining <= 0) {
+      return {
+        ...game,
+        timeRemaining: 0,
+        lastServerTime: 0,
+        isRunning: false,
+        status: 'scheduled',
+        updatedAt: new Date()
+      };
+    }
+
+    return {
+      ...game,
+      lastServerTime: newTimeRemaining,
+      updatedAt: new Date()
+    };
+  }
   static createGame(request: CreateGameRequest): Game {
     const id = uuidv4();
     const settings = { ...DEFAULT_SETTINGS, ...request.settings };
@@ -85,8 +113,31 @@ export class GameStorage {
   static getGame(id: string): Game | null {
     const games = loadGamesFromStorage();
     const game = games.get(id) || null;
-    logGameState('GET_GAME', id, { found: !!game, totalGames: games.size });
-    return game;
+    if (!game) {
+      logGameState('GET_GAME', id, { found: false, totalGames: games.size });
+      return null;
+    }
+
+    // Calculate current server time and update if needed
+    const updatedGame = this.calculateServerTime(game);
+    
+    // If the game state changed (timer expired), save it
+    if (updatedGame.timeRemaining !== game.timeRemaining || updatedGame.isRunning !== game.isRunning) {
+      games.set(id, updatedGame);
+      saveGamesToStorage(games);
+      logGameState('GET_GAME_AUTO_UPDATE', id, { 
+        timeRemaining: updatedGame.timeRemaining, 
+        isRunning: updatedGame.isRunning 
+      });
+    }
+
+    logGameState('GET_GAME', id, { 
+      found: true, 
+      totalGames: games.size, 
+      timeRemaining: updatedGame.lastServerTime || updatedGame.timeRemaining,
+      isRunning: updatedGame.isRunning 
+    });
+    return updatedGame;
   }
 
   static updateGame(id: string, updates: Partial<Game>): Game | null {
@@ -139,14 +190,29 @@ export class GameStorage {
 
   // Timer management
   static startTimer(id: string): Game | null {
+    const game = this.getGame(id);
+    if (!game) return null;
+
     return this.updateGame(id, { 
       isRunning: true, 
-      status: 'live' 
+      status: 'live',
+      timerStartedAt: new Date(),
+      timeRemaining: game.timeRemaining // Preserve current time when starting
     });
   }
 
   static pauseTimer(id: string): Game | null {
-    return this.updateGame(id, { isRunning: false });
+    const game = this.getGame(id);
+    if (!game) return null;
+
+    // Calculate current time before pausing
+    const updatedGame = this.calculateServerTime(game);
+    
+    return this.updateGame(id, { 
+      isRunning: false,
+      timeRemaining: updatedGame.lastServerTime || updatedGame.timeRemaining,
+      timerStartedAt: undefined // Clear timer start time
+    });
   }
 
   static nextQuarter(id: string): Game | null {

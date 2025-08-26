@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Game } from '@/types/game';
 import QRCode from 'qrcode';
@@ -14,7 +14,7 @@ export default function GameViewer() {
   const [error, setError] = useState('');
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [showShareSection, setShowShareSection] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  // No timerRef needed - using server-side authoritative time
 
   // Load game data - but don't overwrite local timer if it's running
   const loadGame = async () => {
@@ -25,20 +25,8 @@ export default function GameViewer() {
       }
       const { game: serverGame } = await response.json();
       
-      // If we have a local timer running, preserve the local time and running state
-      setGame(currentGame => {
-        if (currentGame?.isRunning && currentGame?.status === 'live' && timerRef.current) {
-          // Keep local timer state, but update scores and other fields from server
-          return {
-            ...serverGame, // This includes updated scores
-            timeRemaining: currentGame.timeRemaining, // Preserve local timer
-            isRunning: currentGame.isRunning, // Preserve running state
-            status: currentGame.status, // Preserve status
-          };
-        }
-        // Otherwise use server data completely
-        return serverGame;
-      });
+      // Use server data directly - server time is authoritative
+      setGame(serverGame);
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load game');
@@ -77,59 +65,10 @@ export default function GameViewer() {
     return () => clearInterval(interval);
   }, [gameId]); // Keep simple dependency
 
-  // Timer management effect for viewer - only start/stop timer, don't recreate
-  useEffect(() => {
-    const shouldBeRunning = game?.isRunning && game?.status === 'live';
-    
-    if (shouldBeRunning && !timerRef.current) {
-      // Start timer
-      timerRef.current = setInterval(() => {
-        setGame(currentGame => {
-          if (!currentGame || !currentGame.isRunning || currentGame.timeRemaining <= 0) {
-            return currentGame;
-          }
-          
-          const newTimeRemaining = currentGame.timeRemaining - 1;
-          
-          // If time reaches 0, pause the game
-          if (newTimeRemaining <= 0) {
-            return {
-              ...currentGame,
-              timeRemaining: 0,
-              isRunning: false,
-              status: 'scheduled'
-            };
-          }
-          
-          return {
-            ...currentGame,
-            timeRemaining: newTimeRemaining
-          };
-        });
-      }, 1000);
-    } else if (!shouldBeRunning && timerRef.current) {
-      // Stop timer
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
+  // Server-side timer: No local countdown needed, server calculates authoritative time
+  // All devices sync to server time via API polling every 3 seconds
 
-    // Cleanup on unmount
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [game?.isRunning, game?.status]);
-
-  // Cleanup timer when component unmounts
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, []);
+  // No local timer cleanup needed - using server-side time
 
   // Format time display
   const formatTime = (seconds: number) => {

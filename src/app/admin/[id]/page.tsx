@@ -29,20 +29,8 @@ export default function AdminPanel() {
       }
       const { game: serverGame } = await response.json();
       
-      // If we have a local timer running, preserve the local time and running state
-      setGame(currentGame => {
-        if (currentGame?.isRunning && currentGame?.status === 'live' && timerRef.current) {
-          // Keep local timer state, but update other fields from server
-          return {
-            ...serverGame,
-            timeRemaining: currentGame.timeRemaining,
-            isRunning: currentGame.isRunning,
-            status: currentGame.status,
-          };
-        }
-        // Otherwise use server data
-        return serverGame;
-      });
+      // Use server time as authoritative, but allow smooth local countdown between syncs
+      setGame(serverGame);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load game');
     }
@@ -116,6 +104,17 @@ export default function AdminPanel() {
         timerRef.current = null;
       }
     };
+  }, [game?.isRunning, game?.status]); // React to timer state changes
+
+  // Periodic server sync to prevent timer drift (every 10 seconds during active game)
+  useEffect(() => {
+    if (!game?.isRunning || game?.status !== 'live') return;
+
+    const syncInterval = setInterval(() => {
+      loadGame(); // Sync with server time
+    }, 10000); // Sync every 10 seconds
+
+    return () => clearInterval(syncInterval);
   }, [game?.isRunning, game?.status]);
 
   // Cleanup timer when component unmounts

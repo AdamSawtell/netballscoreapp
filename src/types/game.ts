@@ -5,10 +5,12 @@ export interface Game {
   scoreA: number;
   scoreB: number;
   currentQuarter: number;
-  timeRemaining: number; // in seconds
+  timeRemaining: number; // in seconds - server authoritative
   quarterLength: number; // in minutes - for display purposes
   status: 'scheduled' | 'live' | 'break' | 'finished';
   isRunning: boolean;
+  timerStartedAt?: Date; // when timer was last started for server-side calculation
+  lastServerTime?: number; // last calculated server time for sync
   createdAt: Date;
   updatedAt: Date;
 }
