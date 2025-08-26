@@ -13,15 +13,29 @@ export default function GameViewer() {
   const [error, setError] = useState('');
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load game data
+  // Load game data - but don't overwrite local timer if it's running
   const loadGame = async () => {
     try {
       const response = await fetch(`/api/games/${gameId}`);
       if (!response.ok) {
         throw new Error('Game not found');
       }
-      const { game } = await response.json();
-      setGame(game);
+      const { game: serverGame } = await response.json();
+      
+      // If we have a local timer running, preserve the local time and running state
+      setGame(currentGame => {
+        if (currentGame?.isRunning && currentGame?.status === 'live' && timerRef.current) {
+          // Keep local timer state, but update scores and other fields from server
+          return {
+            ...serverGame,
+            timeRemaining: currentGame.timeRemaining,
+            isRunning: currentGame.isRunning,
+            status: currentGame.status,
+          };
+        }
+        // Otherwise use server data
+        return serverGame;
+      });
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load game');
@@ -30,12 +44,19 @@ export default function GameViewer() {
     }
   };
 
-  // Auto-refresh game data every 5 seconds (reduced frequency)
+  // Auto-refresh game data every 5 seconds - but only when timer is NOT running locally
   useEffect(() => {
     loadGame();
-    const interval = setInterval(loadGame, 5000);
+    
+    const interval = setInterval(() => {
+      // Only refresh from API if timer is not running locally
+      if (!game?.isRunning || game?.status !== 'live') {
+        loadGame();
+      }
+    }, 5000);
+    
     return () => clearInterval(interval);
-  }, [gameId]); // loadGame is stable, no need to include in dependencies
+  }, [gameId, game?.isRunning, game?.status]); // Include timer state
 
   // Timer management effect for viewer - only start/stop timer, don't recreate
   useEffect(() => {
