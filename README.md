@@ -1,36 +1,212 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🏐 Netball Live Scorer App
 
-## Getting Started
+A **simple, web-based netball scoring application** for live game scoring and spectating. Built with Next.js and deployed on AWS Amplify.
 
-First, run the development server:
+## 🚀 Live Demo
+**Production App**: https://master.d2ads5qqqqdckv.amplifyapp.com
 
+## ✨ Features
+
+### 🎮 Game Management
+- **Create games** with custom team names and quarter lengths (10, 12, 15, 20 minutes)
+- **QR code generation** for easy spectator access
+- **Shareable links** for game distribution
+
+### 🔐 Admin Panel
+- **Password protection** (default: `netball2025`)
+- **Live scoring controls** (+/- goals for each team)
+- **Timer management** (start/pause/next quarter/end game)
+- **Real-time updates** with server-side authoritative timing
+- **QR code sharing** (download, share, copy link)
+
+### 👥 Spectator View
+- **Live score updates** every 3 seconds
+- **Synchronized timer** across all devices
+- **Mobile responsive** design
+- **Share functionality** for inviting others
+- **No login required** - just scan QR or use link
+
+### 🔄 Real-Time Synchronization
+- **Server-side authoritative timer** prevents drift across devices
+- **Persistent file storage** for multi-spectator access
+- **Automatic game state sync** across all connected devices
+- **Live score updates** without page refresh
+
+## 🛠️ Technical Stack
+
+- **Frontend**: Next.js 15.5.0, React, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes with in-memory + file storage
+- **Deployment**: AWS Amplify with automatic CI/CD
+- **Libraries**: QRCode generation, UUID for game IDs
+- **Real-time**: Polling-based updates (3s for spectators, 10s admin sync)
+
+## 🏗️ Architecture
+
+### Storage
+- **Primary**: In-memory Map for fast access
+- **Persistence**: File-based backup in `/tmp/netball-games.json`
+- **Sync**: Cross-instance sharing via persistent file storage
+
+### Timer System
+- **Server-side calculation** based on `timerStartedAt` timestamp
+- **Admin**: Smooth local countdown + 10s server sync
+- **Spectators**: Pure server time via 3s polling
+- **Automatic expiry** handled server-side
+
+## 🚀 Quick Start
+
+### Development
 ```bash
+# Clone repository
+git clone https://github.com/AdamSawtell/netballscoreapp.git
+cd netballscoreapp
+
+# Install dependencies
+npm install
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to view the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Production Build
+```bash
+# Build for production
+npm run build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Start production server
+npm start
+```
 
-## Learn More
+## 🎯 Usage
 
-To learn more about Next.js, take a look at the following resources:
+### Creating a Game
+1. Visit the home page
+2. Enter team names (Team A and Team B)
+3. Select quarter length (10, 12, 15, or 20 minutes)
+4. Click "Create Game"
+5. Share the generated QR code or links
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Scoring (Admin)
+1. Access admin panel with password: `netball2025`
+2. Use +/- buttons to update scores
+3. Control timer with Start/Pause/Next Quarter/End buttons
+4. Share QR code with spectators anytime
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Spectating
+1. Scan QR code or use shared link
+2. View live scores and timer
+3. Share game with others using built-in share options
+4. Watch automatic updates every 3 seconds
 
-## Deploy on Vercel
+## 🔧 Configuration
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Environment Variables
+```bash
+# Optional: Custom admin password
+ADMIN_PASSWORD=your_custom_password
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Game Settings
+- **Quarter Lengths**: 10, 12, 15, 20 minutes
+- **Total Quarters**: 4 (fixed)
+- **Default Quarter**: 15 minutes
+- **Timer Updates**: Server-authoritative, sub-second accuracy
+
+## 📱 Device Compatibility
+
+- **Desktop**: Full admin and spectator functionality
+- **Mobile**: Optimized responsive design
+- **Tablets**: Touch-friendly interface
+- **All Browsers**: Modern browser support (Chrome, Firefox, Safari, Edge)
+
+## 🧪 Testing
+
+### Comprehensive Testing Protocols
+- **Timer Testing**: See `TIMER_TESTING.md` for 7-scenario timer test protocol
+- **Full Function Testing**: See `FULL_FUNCTION_TEST.md` for 14-test comprehensive protocol
+
+### Key Test Scenarios
+1. Multi-device timer synchronization
+2. QR code generation and sharing
+3. Score updates across devices
+4. Timer persistence during scoring
+5. Multi-spectator concurrent access
+
+## 🔍 Debugging
+
+### Server Logs
+Enhanced logging provides detailed information:
+```
+=== GAME STORAGE GET_GAME ===
+Timestamp: 2025-01-26T03:15:30.123Z
+Environment: production
+Storage file: /tmp/netball-games.json
+Game ID: abc123-def456
+Additional info: { found: true, totalGames: 1 }
+=====================================
+```
+
+### Common Issues
+- **Game Not Found**: Check logs for storage file status
+- **Timer Drift**: Server-side calculation prevents drift
+- **Score Sync**: Automatic 3-second updates for spectators
+
+## 🚀 Deployment
+
+### AWS Amplify
+The app is configured for AWS Amplify deployment with:
+- **Build Configuration**: `amplify.yml`
+- **Next.js Config**: Standalone output for serverless
+- **Environment**: Production-ready settings
+
+### Manual Deploy
+```bash
+# Build and deploy
+npm run build
+# Deploy to your hosting platform
+```
+
+## 📋 Recent Updates
+
+### v1.3.0 - Timer Synchronization Fix
+- ✅ Server-side authoritative timer
+- ✅ Multi-device timer synchronization
+- ✅ Persistent file storage for multi-spectator access
+- ✅ Enhanced debugging and logging
+
+### v1.2.0 - QR Sharing Enhancement
+- ✅ Spectator QR code sharing functionality
+- ✅ Universal sharing (download, native share, copy link)
+- ✅ Collapsible share sections
+
+### v1.1.0 - Critical Bug Fixes
+- ✅ Timer no longer resets during scoring
+- ✅ Quarter length display updates correctly
+- ✅ Text visibility issues resolved
+- ✅ Multi-spectator "game not found" errors fixed
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly (see testing protocols)
+5. Submit a pull request
+
+## 📄 License
+
+This project is open source and available under the MIT License.
+
+## 🎯 Future Enhancements
+
+- Database storage (DynamoDB) for better scalability
+- Advanced game statistics
+- Multiple game management
+- Tournament bracket support
+- Historical game data
+
+---
+
+**Made with ❤️ for the netball community**
