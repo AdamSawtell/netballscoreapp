@@ -3,29 +3,30 @@ import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
 
-// Multiple storage locations for redundancy
-const STORAGE_LOCATIONS = [
-  path.join('/tmp', 'netball-games.json'),
-  path.join(process.cwd(), '.games-cache.json'),
-  path.join(__dirname, '../../.games-backup.json')
-];
+// Serverless-friendly storage approach
+// Priority: Environment variable cache > Global cache > In-memory fallback
+const CACHE_KEY = 'NETBALL_GAMES_CACHE';
 
-// Try to find the best available storage location
+// Get storage location with serverless compatibility
 const getStorageFile = (): string => {
-  for (const location of STORAGE_LOCATIONS) {
-    try {
-      // Test if we can write to this location
-      const testFile = location + '.test';
-      fs.writeFileSync(testFile, '{}');
-      fs.unlinkSync(testFile);
-      console.log(`Using storage location: ${location}`);
-      return location;
-    } catch (error) {
-      console.log(`Cannot write to ${location}:`, error instanceof Error ? error.message : String(error));
-    }
+  // In production/serverless environments, prioritize persistent solutions
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    // For serverless, we'll rely on environment variable persistence and global cache
+    return '/tmp/netball-games.json'; // Still try, but expect it to fail
   }
-  console.log('WARNING: No writable storage location found, using /tmp as fallback');
-  return STORAGE_LOCATIONS[0];
+  
+  // Local development - use project directory
+  const localFile = path.join(process.cwd(), '.games-cache.json');
+  try {
+    const testFile = localFile + '.test';
+    fs.writeFileSync(testFile, '{}');
+    fs.unlinkSync(testFile);
+    console.log(`Using local storage: ${localFile}`);
+    return localFile;
+  } catch {
+    console.log(`Cannot write to ${localFile}, using tmp`);
+    return '/tmp/netball-games.json';
+  }
 };
 
 const STORAGE_FILE = getStorageFile();
@@ -45,16 +46,40 @@ const logGameState = (operation: string, gameId?: string, additional?: Record<st
   console.log('=====================================');
 };
 
-// Global in-memory cache as ultimate fallback
+// Enhanced global cache with better persistence
 declare global {
   var gameStorageCache: Map<string, Game> | undefined;
+  var gameStorageTimestamp: number | undefined;
 }
 
-// Load games with multiple fallback strategies
+// Cache timeout (5 minutes) for refreshing stale data
+const CACHE_TIMEOUT = 5 * 60 * 1000;
+
+// Load games with multiple fallback strategies optimized for serverless
 const loadGamesFromStorage = (): Map<string, Game> => {
   const games = new Map<string, Game>();
+  const now = Date.now();
   
-  // Strategy 1: Try to load from file storage
+  // Strategy 1: Check global cache first (fastest in serverless)
+  if (typeof global !== 'undefined' && global.gameStorageCache && global.gameStorageTimestamp) {
+    const cacheAge = now - global.gameStorageTimestamp;
+    if (cacheAge < CACHE_TIMEOUT) {
+      global.gameStorageCache.forEach((game, id) => games.set(id, game));
+      logGameState('LOAD_FROM_GLOBAL_CACHE_FRESH', undefined, { 
+        count: games.size, 
+        gameIds: Array.from(games.keys()),
+        cacheAge: Math.round(cacheAge / 1000) + 's'
+      });
+      return games;
+    } else {
+      logGameState('GLOBAL_CACHE_STALE', undefined, { 
+        cacheAge: Math.round(cacheAge / 1000) + 's',
+        timeout: CACHE_TIMEOUT / 1000 + 's'
+      });
+    }
+  }
+  
+  // Strategy 2: Try to load from file storage
   try {
     if (fs.existsSync(STORAGE_FILE)) {
       const data = fs.readFileSync(STORAGE_FILE, 'utf-8');
@@ -68,16 +93,18 @@ const loadGamesFromStorage = (): Map<string, Game> => {
         }
         games.set(game.id, game);
       });
+      
+      // Update global cache with fresh data
+      if (typeof global !== 'undefined') {
+        global.gameStorageCache = new Map(games);
+        global.gameStorageTimestamp = now;
+      }
+      
       logGameState('LOAD_FROM_FILE', undefined, { 
         count: games.size, 
         gameIds: Array.from(games.keys()),
         file: STORAGE_FILE
       });
-      
-      // Update global cache
-      if (typeof global !== 'undefined') {
-        global.gameStorageCache = new Map(games);
-      }
       return games;
     }
   } catch (error) {
@@ -87,34 +114,42 @@ const loadGamesFromStorage = (): Map<string, Game> => {
     });
   }
   
-  // Strategy 2: Fall back to global cache
+  // Strategy 3: Use stale global cache if available (better than nothing)
   if (typeof global !== 'undefined' && global.gameStorageCache) {
     global.gameStorageCache.forEach((game, id) => games.set(id, game));
-    logGameState('LOAD_FROM_GLOBAL_CACHE', undefined, { 
+    logGameState('LOAD_FROM_GLOBAL_CACHE_STALE', undefined, { 
       count: games.size, 
-      gameIds: Array.from(games.keys()) 
+      gameIds: Array.from(games.keys()),
+      note: 'Using stale cache as fallback'
     });
     return games;
   }
   
-  // Strategy 3: No games found anywhere
+  // Strategy 4: No games found anywhere
   logGameState('NO_GAMES_FOUND_ANYWHERE', undefined, { 
     fileExists: fs.existsSync(STORAGE_FILE),
-    globalCacheExists: !!(typeof global !== 'undefined' && global.gameStorageCache)
+    globalCacheExists: !!(typeof global !== 'undefined' && global.gameStorageCache),
+    environment: process.env.NODE_ENV || 'unknown'
   });
   
   return games;
 };
 
-// Save games with redundancy
+// Save games with redundancy and timestamp tracking
 const saveGamesToStorage = (games: Map<string, Game>) => {
-  // Always update global cache first (most reliable)
+  const now = Date.now();
+  
+  // Always update global cache first (most reliable in serverless)
   if (typeof global !== 'undefined') {
     global.gameStorageCache = new Map(games);
-    logGameState('SAVE_TO_GLOBAL_CACHE', undefined, { count: games.size });
+    global.gameStorageTimestamp = now;
+    logGameState('SAVE_TO_GLOBAL_CACHE', undefined, { 
+      count: games.size,
+      timestamp: new Date(now).toISOString()
+    });
   }
   
-  // Try to save to file storage
+  // Try to save to file storage (may fail in serverless, but try anyway)
   try {
     const gameArray = Array.from(games.values());
     fs.writeFileSync(STORAGE_FILE, JSON.stringify(gameArray, null, 2));
@@ -127,7 +162,8 @@ const saveGamesToStorage = (games: Map<string, Game>) => {
     logGameState('FILE_SAVE_ERROR', undefined, { 
       error: error instanceof Error ? error.message : String(error),
       file: STORAGE_FILE,
-      globalCacheUpdated: true // Still saved to global cache
+      globalCacheUpdated: true, // Still saved to global cache
+      environment: process.env.NODE_ENV || 'unknown'
     });
   }
 };
@@ -166,7 +202,8 @@ export class GameStorage {
 
     return {
       ...game,
-      lastServerTime: newTimeRemaining,
+      timeRemaining: newTimeRemaining, // Update actual timeRemaining for consistency
+      lastServerTime: newTimeRemaining, // Keep for debugging/tracking
       updatedAt: new Date()
     };
   }

@@ -17,7 +17,16 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ game });
+    // Ensure spectators get the correct timer value
+    const responseGame = {
+      ...game,
+      // Use lastServerTime if available and timer is running, otherwise use timeRemaining
+      timeRemaining: game.isRunning && game.lastServerTime !== undefined 
+        ? game.lastServerTime 
+        : game.timeRemaining
+    };
+
+    return NextResponse.json({ game: responseGame });
   } catch (error) {
     console.error('Error fetching game:', error);
     return NextResponse.json(
