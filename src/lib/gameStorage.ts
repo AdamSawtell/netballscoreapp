@@ -1,39 +1,58 @@
 import { Game, CreateGameRequest, DEFAULT_SETTINGS } from '@/types/game';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import path from 'path';
 
-// Simple in-memory storage for now (will move to database later)
-const games = new Map<string, Game>();
-
-// Global store with enhanced debugging
-declare global {
-  var globalGameStore: Map<string, Game> | undefined;
-}
-
-// Use global storage to persist across serverless function instances
-const getGlobalStore = (): Map<string, Game> => {
-  if (typeof global !== 'undefined') {
-    if (!global.globalGameStore) {
-      global.globalGameStore = new Map<string, Game>();
-      console.log('Created new global game store');
-    }
-    return global.globalGameStore;
-  }
-  return games; // Fallback to local storage
-};
+// Persistent storage file in Lambda's writable /tmp directory
+const STORAGE_FILE = path.join('/tmp', 'netball-games.json');
 
 // Enhanced logging
-const logGameState = (operation: string, gameId?: string) => {
-  const store = getGlobalStore();
+const logGameState = (operation: string, gameId?: string, additional?: Record<string, unknown>) => {
   console.log(`=== GAME STORAGE ${operation} ===`);
   console.log(`Timestamp: ${new Date().toISOString()}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'unknown'}`);
-  console.log(`Total games in store: ${store.size}`);
-  console.log(`Game IDs: [${Array.from(store.keys()).join(', ')}]`);
+  console.log(`Storage file: ${STORAGE_FILE}`);
   if (gameId) {
-    console.log(`Requested game ID: ${gameId}`);
-    console.log(`Game exists: ${store.has(gameId)}`);
+    console.log(`Game ID: ${gameId}`);
+  }
+  if (additional) {
+    console.log(`Additional info:`, additional);
   }
   console.log('=====================================');
+};
+
+// Load games from persistent storage
+const loadGamesFromStorage = (): Map<string, Game> => {
+  const games = new Map<string, Game>();
+  try {
+    if (fs.existsSync(STORAGE_FILE)) {
+      const data = fs.readFileSync(STORAGE_FILE, 'utf-8');
+      const gameArray = JSON.parse(data) as Game[];
+      gameArray.forEach(game => {
+        // Convert date strings back to Date objects
+        game.createdAt = new Date(game.createdAt);
+        game.updatedAt = new Date(game.updatedAt);
+        games.set(game.id, game);
+      });
+      logGameState('LOAD_FROM_STORAGE', undefined, { count: games.size, gameIds: Array.from(games.keys()) });
+    } else {
+      logGameState('NO_STORAGE_FILE_FOUND');
+    }
+  } catch (error) {
+    logGameState('LOAD_ERROR', undefined, { error: error instanceof Error ? error.message : String(error) });
+  }
+  return games;
+};
+
+// Save games to persistent storage
+const saveGamesToStorage = (games: Map<string, Game>) => {
+  try {
+    const gameArray = Array.from(games.values());
+    fs.writeFileSync(STORAGE_FILE, JSON.stringify(gameArray, null, 2));
+    logGameState('SAVE_TO_STORAGE', undefined, { count: games.size, fileExists: fs.existsSync(STORAGE_FILE) });
+  } catch (error) {
+    logGameState('SAVE_ERROR', undefined, { error: error instanceof Error ? error.message : String(error) });
+  }
 };
 
 export class GameStorage {
@@ -56,24 +75,25 @@ export class GameStorage {
       updatedAt: new Date(),
     };
 
-    const store = getGlobalStore();
-    store.set(id, game);
+    const games = loadGamesFromStorage();
+    games.set(id, game);
+    saveGamesToStorage(games);
     logGameState('CREATE_GAME', id);
     return game;
   }
 
   static getGame(id: string): Game | null {
-    const store = getGlobalStore();
-    const game = store.get(id) || null;
-    logGameState('GET_GAME', id);
+    const games = loadGamesFromStorage();
+    const game = games.get(id) || null;
+    logGameState('GET_GAME', id, { found: !!game, totalGames: games.size });
     return game;
   }
 
   static updateGame(id: string, updates: Partial<Game>): Game | null {
-    const store = getGlobalStore();
-    const game = store.get(id);
+    const games = loadGamesFromStorage();
+    const game = games.get(id);
     if (!game) {
-      logGameState('UPDATE_GAME_FAILED', id);
+      logGameState('UPDATE_GAME_FAILED', id, { totalGames: games.size });
       return null;
     }
 
@@ -83,20 +103,22 @@ export class GameStorage {
       updatedAt: new Date(),
     };
 
-    store.set(id, updatedGame);
+    games.set(id, updatedGame);
+    saveGamesToStorage(games);
     logGameState('UPDATE_GAME', id);
     return updatedGame;
   }
 
   static getAllGames(): Game[] {
-    const store = getGlobalStore();
-    return Array.from(store.values());
+    const games = loadGamesFromStorage();
+    return Array.from(games.values());
   }
 
   static deleteGame(id: string): boolean {
-    const store = getGlobalStore();
-    const result = store.delete(id);
-    logGameState('DELETE_GAME', id);
+    const games = loadGamesFromStorage();
+    const result = games.delete(id);
+    saveGamesToStorage(games);
+    logGameState('DELETE_GAME', id, { result });
     return result;
   }
 
