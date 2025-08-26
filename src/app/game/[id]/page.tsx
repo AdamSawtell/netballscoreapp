@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Game } from '@/types/game';
 
@@ -11,6 +11,7 @@ export default function GameViewer() {
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load game data
   const loadGame = async () => {
@@ -36,37 +37,59 @@ export default function GameViewer() {
     return () => clearInterval(interval);
   }, [gameId]); // loadGame is stable, no need to include in dependencies
 
-  // Timer countdown effect for live games
+  // Timer management effect for viewer - only start/stop timer, don't recreate
   useEffect(() => {
-    if (!game || !game.isRunning || game.status !== 'live') return;
-
-    const interval = setInterval(() => {
-      setGame(currentGame => {
-        if (!currentGame || !currentGame.isRunning || currentGame.timeRemaining <= 0) {
-          return currentGame;
-        }
-        
-        const newTimeRemaining = currentGame.timeRemaining - 1;
-        
-        // If time reaches 0, pause the game
-        if (newTimeRemaining <= 0) {
+    const shouldBeRunning = game?.isRunning && game?.status === 'live';
+    
+    if (shouldBeRunning && !timerRef.current) {
+      // Start timer
+      timerRef.current = setInterval(() => {
+        setGame(currentGame => {
+          if (!currentGame || !currentGame.isRunning || currentGame.timeRemaining <= 0) {
+            return currentGame;
+          }
+          
+          const newTimeRemaining = currentGame.timeRemaining - 1;
+          
+          // If time reaches 0, pause the game
+          if (newTimeRemaining <= 0) {
+            return {
+              ...currentGame,
+              timeRemaining: 0,
+              isRunning: false,
+              status: 'scheduled'
+            };
+          }
+          
           return {
             ...currentGame,
-            timeRemaining: 0,
-            isRunning: false,
-            status: 'scheduled'
+            timeRemaining: newTimeRemaining
           };
-        }
-        
-        return {
-          ...currentGame,
-          timeRemaining: newTimeRemaining
-        };
-      });
-    }, 1000);
+        });
+      }, 1000);
+    } else if (!shouldBeRunning && timerRef.current) {
+      // Stop timer
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
 
-    return () => clearInterval(interval);
+    // Cleanup on unmount
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
   }, [game?.isRunning, game?.status]);
+
+  // Cleanup timer when component unmounts
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
 
   // Format time display
   const formatTime = (seconds: number) => {
