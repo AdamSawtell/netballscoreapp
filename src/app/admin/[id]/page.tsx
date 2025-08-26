@@ -63,20 +63,38 @@ export default function AdminPanel() {
 
   // Timer management effect - only start/stop timer, don't recreate
   useEffect(() => {
-    const shouldBeRunning = game?.isRunning && game?.status === 'live';
+    const shouldBeRunning = game?.isRunning && game?.status === 'live' && game?.timeRemaining > 0;
     
     if (shouldBeRunning && !timerRef.current) {
       // Start timer
       timerRef.current = setInterval(() => {
         setGame(currentGame => {
           if (!currentGame || !currentGame.isRunning || currentGame.timeRemaining <= 0) {
+            // Clear the timer and stop the game
+            if (timerRef.current) {
+              clearInterval(timerRef.current);
+              timerRef.current = null;
+            }
             return currentGame;
           }
           
           const newTimeRemaining = currentGame.timeRemaining - 1;
           
-          // If time reaches 0, pause the game
+          // If time reaches 0, stop the timer immediately
           if (newTimeRemaining <= 0) {
+            // Clear the timer to prevent further ticking
+            if (timerRef.current) {
+              clearInterval(timerRef.current);
+              timerRef.current = null;
+            }
+            
+            // Update server state that timer has expired
+            fetch(`/api/games/${gameId}/timer`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'pause' }),
+            }).catch(console.error);
+            
             return {
               ...currentGame,
               timeRemaining: 0,
@@ -104,18 +122,21 @@ export default function AdminPanel() {
         timerRef.current = null;
       }
     };
-  }, [game?.isRunning, game?.status]); // React to timer state changes
+  }, [game?.isRunning, game?.status, game?.timeRemaining, gameId]); // React to timer state changes
 
   // Periodic server sync to prevent timer drift (every 10 seconds during active game)
   useEffect(() => {
-    if (!game?.isRunning || game?.status !== 'live') return;
+    if (!game?.isRunning || game?.status !== 'live' || game?.timeRemaining <= 0) return;
 
     const syncInterval = setInterval(() => {
-      loadGame(); // Sync with server time
+      // Only sync if timer is still running and has time remaining
+      if (game?.isRunning && game?.status === 'live' && game?.timeRemaining > 0) {
+        loadGame(); // Sync with server time
+      }
     }, 10000); // Sync every 10 seconds
 
     return () => clearInterval(syncInterval);
-  }, [game?.isRunning, game?.status]);
+  }, [game?.isRunning, game?.status, game?.timeRemaining]);
 
   // Cleanup timer when component unmounts
   useEffect(() => {
@@ -373,7 +394,7 @@ export default function AdminPanel() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <button
               onClick={() => controlTimer('start')}
-              disabled={loading || game.isRunning || game.status === 'finished'}
+              disabled={loading || game.isRunning || game.status === 'finished' || game.timeRemaining === 0}
               className="bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
             >
               ▶️ Start
@@ -387,7 +408,7 @@ export default function AdminPanel() {
             </button>
             <button
               onClick={() => controlTimer('nextQuarter')}
-              disabled={loading || game.status === 'finished'}
+              disabled={loading || game.status === 'finished' || (game.isRunning && game.timeRemaining > 0)}
               className="bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
             >
               ⏭️ Next Quarter

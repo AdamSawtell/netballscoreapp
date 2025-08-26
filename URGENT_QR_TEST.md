@@ -90,3 +90,4 @@ If "game not found" confirmed:
 - **Report findings**: Document exact failure scenarios
 
 **CRITICAL: This issue breaks the core functionality of spectator access via QR codes. Immediate investigation and fix required.**
+

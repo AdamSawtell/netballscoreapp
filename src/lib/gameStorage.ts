@@ -143,16 +143,25 @@ export class GameStorage {
     const elapsedSeconds = Math.floor((now.getTime() - game.timerStartedAt.getTime()) / 1000);
     const newTimeRemaining = Math.max(0, game.timeRemaining - elapsedSeconds);
 
-    // If time has run out, stop the timer
+    // If time has run out, stop the timer and save state immediately
     if (newTimeRemaining <= 0) {
-      return {
+      const expiredGame = {
         ...game,
         timeRemaining: 0,
         lastServerTime: 0,
         isRunning: false,
-        status: 'scheduled',
+        status: 'scheduled' as const,
+        timerStartedAt: undefined, // Clear timer start time
         updatedAt: new Date()
       };
+      
+      // Persist the stopped state immediately
+      const games = loadGamesFromStorage();
+      games.set(game.id, expiredGame);
+      saveGamesToStorage(games);
+      logGameState('TIMER_EXPIRED', game.id, { quarter: game.currentQuarter });
+      
+      return expiredGame;
     }
 
     return {
@@ -304,6 +313,8 @@ export class GameStorage {
       timeRemaining: isFinished ? 0 : game.quarterLength * 60, // use game's quarter length
       status: isFinished ? 'finished' : 'scheduled',
       isRunning: false,
+      timerStartedAt: undefined, // Clear any previous timer start time
+      lastServerTime: undefined, // Clear server time cache
     });
   }
 
