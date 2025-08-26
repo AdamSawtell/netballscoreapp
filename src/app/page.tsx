@@ -2,12 +2,16 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import QRCode from 'qrcode';
 
 export default function Home() {
   const [teamA, setTeamA] = useState('');
   const [teamB, setTeamB] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [gameCreated, setGameCreated] = useState(false);
+  const [gameLinks, setGameLinks] = useState({ admin: '', viewer: '' });
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -45,14 +49,112 @@ export default function Home() {
 
       const { links } = await response.json();
       
-      // Redirect to admin panel
-      router.push(links.admin);
+      // Generate QR code for viewer link
+      const viewerUrl = `${window.location.origin}${links.viewer}`;
+      const qrDataUrl = await QRCode.toDataURL(viewerUrl, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      
+      // Show success screen with links and QR code
+      setGameLinks(links);
+      setQrCodeUrl(qrDataUrl);
+      setGameCreated(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setIsLoading(false);
     }
   };
+
+  // If game was created successfully, show success screen
+  if (gameCreated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          {/* Success Header */}
+          <div className="text-center mb-8">
+            <div className="text-6xl mb-4">🎉</div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Game Created!
+            </h1>
+            <p className="text-gray-600">
+              {teamA} vs {teamB}
+            </p>
+          </div>
+
+          {/* QR Code */}
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h3 className="text-lg font-bold text-center mb-4">Spectator Access</h3>
+            <div className="text-center mb-4">
+              {qrCodeUrl && (
+                <img 
+                  src={qrCodeUrl} 
+                  alt="QR Code for spectator access" 
+                  className="mx-auto border border-gray-200 rounded-lg p-2"
+                />
+              )}
+              <p className="text-sm text-gray-600 mt-3">
+                📱 Spectators can scan this QR code to watch live scores
+              </p>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-3">
+            <button
+              onClick={() => router.push(gameLinks.admin)}
+              className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 font-bold text-lg"
+            >
+              🏐 Start Scoring
+            </button>
+            
+            <button
+              onClick={() => window.open(gameLinks.viewer, '_blank')}
+              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 font-medium"
+            >
+              👀 Preview Spectator View
+            </button>
+            
+            <button
+              onClick={() => {
+                setGameCreated(false);
+                setTeamA('');
+                setTeamB('');
+                setError('');
+              }}
+              className="w-full bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 font-medium"
+            >
+              Create Another Game
+            </button>
+          </div>
+
+          {/* Copy Link */}
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <p className="text-sm font-medium text-gray-700 mb-2">Share Link:</p>
+            <div className="flex items-center space-x-2">
+              <input
+                type="text"
+                value={`${window.location.origin}${gameLinks.viewer}`}
+                readOnly
+                className="flex-1 px-2 py-1 text-xs bg-white border border-gray-300 rounded text-gray-900"
+              />
+              <button
+                onClick={() => navigator.clipboard.writeText(`${window.location.origin}${gameLinks.viewer}`)}
+                className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center p-4">

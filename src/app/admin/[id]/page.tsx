@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Game } from '@/types/game';
+import QRCode from 'qrcode';
 
 const ADMIN_PASSWORD = 'netball2025';
 
@@ -16,6 +17,7 @@ export default function AdminPanel() {
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
 
   // Load game data
   const loadGame = async () => {
@@ -30,6 +32,31 @@ export default function AdminPanel() {
       setError(err instanceof Error ? err.message : 'Failed to load game');
     }
   };
+
+  // Generate QR code for viewer link
+  const generateQRCode = async () => {
+    try {
+      const viewerUrl = `${window.location.origin}/game/${gameId}`;
+      const qrDataUrl = await QRCode.toDataURL(viewerUrl, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      setQrCodeUrl(qrDataUrl);
+    } catch (err) {
+      console.error('Failed to generate QR code:', err);
+    }
+  };
+
+  // Generate QR code when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      generateQRCode();
+    }
+  }, [isAuthenticated, gameId]);
 
   // Handle password authentication
   const handlePasswordSubmit = (e: React.FormEvent) => {
@@ -294,9 +321,25 @@ export default function AdminPanel() {
           </div>
         </div>
 
-        {/* Viewer Link */}
+        {/* Viewer Link & QR Code */}
         <div className="bg-white rounded-lg shadow-lg p-6">
-          <h3 className="text-lg font-bold mb-3">Share with Spectators</h3>
+          <h3 className="text-lg font-bold mb-4">Share with Spectators</h3>
+          
+          {/* QR Code */}
+          {qrCodeUrl && (
+            <div className="text-center mb-6">
+              <img 
+                src={qrCodeUrl} 
+                alt="QR Code for spectator access" 
+                className="mx-auto border border-gray-200 rounded-lg p-2"
+              />
+              <p className="text-sm text-gray-600 mt-2">
+                📱 Scan with phone camera to view live scores
+              </p>
+            </div>
+          )}
+          
+          {/* Share Link */}
           <div className="flex items-center space-x-3">
             <input
               type="text"
@@ -312,7 +355,7 @@ export default function AdminPanel() {
             </button>
           </div>
           <p className="text-xs text-gray-500 mt-2">
-            Share this link so spectators can watch the live scores
+            Share this link or QR code so spectators can watch the live scores
           </p>
         </div>
 
