@@ -8,7 +8,7 @@ A **simple, web-based netball scoring application** for live game scoring and sp
 ## ✨ Features
 
 ### 🎮 Game Management
-- **Create games** with custom team names and quarter lengths (10, 12, 15, 20 minutes)
+- **Create games** with custom team names and quarter lengths (10, 12, 15 minutes)
 - **QR code generation** for easy spectator access
 - **Shareable links** for game distribution
 
@@ -84,7 +84,7 @@ npm start
 ### Creating a Game
 1. Visit the home page
 2. Enter team names (Team A and Team B)
-3. Select quarter length (10, 12, 15, or 20 minutes)
+3. Select quarter length (10, 12, or 15 minutes)
 4. Click "Create Game"
 5. Share the generated QR code or links
 
@@ -109,7 +109,7 @@ ADMIN_PASSWORD=your_custom_password
 ```
 
 ### Game Settings
-- **Quarter Lengths**: 10, 12, 15, 20 minutes
+- **Quarter Lengths**: 10, 12, 15 minutes
 - **Total Quarters**: 4 (fixed)
 - **Default Quarter**: 15 minutes
 - **Timer Updates**: Server-authoritative, sub-second accuracy
