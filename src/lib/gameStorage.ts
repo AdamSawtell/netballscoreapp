@@ -3,8 +3,32 @@ import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
 
-// Persistent storage file in Lambda's writable /tmp directory
-const STORAGE_FILE = path.join('/tmp', 'netball-games.json');
+// Multiple storage locations for redundancy
+const STORAGE_LOCATIONS = [
+  path.join('/tmp', 'netball-games.json'),
+  path.join(process.cwd(), '.games-cache.json'),
+  path.join(__dirname, '../../.games-backup.json')
+];
+
+// Try to find the best available storage location
+const getStorageFile = (): string => {
+  for (const location of STORAGE_LOCATIONS) {
+    try {
+      // Test if we can write to this location
+      const testFile = location + '.test';
+      fs.writeFileSync(testFile, '{}');
+      fs.unlinkSync(testFile);
+      console.log(`Using storage location: ${location}`);
+      return location;
+    } catch (error) {
+      console.log(`Cannot write to ${location}:`, error instanceof Error ? error.message : String(error));
+    }
+  }
+  console.log('WARNING: No writable storage location found, using /tmp as fallback');
+  return STORAGE_LOCATIONS[0];
+};
+
+const STORAGE_FILE = getStorageFile();
 
 // Enhanced logging
 const logGameState = (operation: string, gameId?: string, additional?: Record<string, unknown>) => {
@@ -21,9 +45,16 @@ const logGameState = (operation: string, gameId?: string, additional?: Record<st
   console.log('=====================================');
 };
 
-// Load games from persistent storage
+// Global in-memory cache as ultimate fallback
+declare global {
+  var gameStorageCache: Map<string, Game> | undefined;
+}
+
+// Load games with multiple fallback strategies
 const loadGamesFromStorage = (): Map<string, Game> => {
   const games = new Map<string, Game>();
+  
+  // Strategy 1: Try to load from file storage
   try {
     if (fs.existsSync(STORAGE_FILE)) {
       const data = fs.readFileSync(STORAGE_FILE, 'utf-8');
@@ -32,26 +63,72 @@ const loadGamesFromStorage = (): Map<string, Game> => {
         // Convert date strings back to Date objects
         game.createdAt = new Date(game.createdAt);
         game.updatedAt = new Date(game.updatedAt);
+        if (game.timerStartedAt) {
+          game.timerStartedAt = new Date(game.timerStartedAt);
+        }
         games.set(game.id, game);
       });
-      logGameState('LOAD_FROM_STORAGE', undefined, { count: games.size, gameIds: Array.from(games.keys()) });
-    } else {
-      logGameState('NO_STORAGE_FILE_FOUND');
+      logGameState('LOAD_FROM_FILE', undefined, { 
+        count: games.size, 
+        gameIds: Array.from(games.keys()),
+        file: STORAGE_FILE
+      });
+      
+      // Update global cache
+      if (typeof global !== 'undefined') {
+        global.gameStorageCache = new Map(games);
+      }
+      return games;
     }
   } catch (error) {
-    logGameState('LOAD_ERROR', undefined, { error: error instanceof Error ? error.message : String(error) });
+    logGameState('FILE_LOAD_ERROR', undefined, { 
+      error: error instanceof Error ? error.message : String(error),
+      file: STORAGE_FILE
+    });
   }
+  
+  // Strategy 2: Fall back to global cache
+  if (typeof global !== 'undefined' && global.gameStorageCache) {
+    global.gameStorageCache.forEach((game, id) => games.set(id, game));
+    logGameState('LOAD_FROM_GLOBAL_CACHE', undefined, { 
+      count: games.size, 
+      gameIds: Array.from(games.keys()) 
+    });
+    return games;
+  }
+  
+  // Strategy 3: No games found anywhere
+  logGameState('NO_GAMES_FOUND_ANYWHERE', undefined, { 
+    fileExists: fs.existsSync(STORAGE_FILE),
+    globalCacheExists: !!(typeof global !== 'undefined' && global.gameStorageCache)
+  });
+  
   return games;
 };
 
-// Save games to persistent storage
+// Save games with redundancy
 const saveGamesToStorage = (games: Map<string, Game>) => {
+  // Always update global cache first (most reliable)
+  if (typeof global !== 'undefined') {
+    global.gameStorageCache = new Map(games);
+    logGameState('SAVE_TO_GLOBAL_CACHE', undefined, { count: games.size });
+  }
+  
+  // Try to save to file storage
   try {
     const gameArray = Array.from(games.values());
     fs.writeFileSync(STORAGE_FILE, JSON.stringify(gameArray, null, 2));
-    logGameState('SAVE_TO_STORAGE', undefined, { count: games.size, fileExists: fs.existsSync(STORAGE_FILE) });
+    logGameState('SAVE_TO_FILE', undefined, { 
+      count: games.size, 
+      fileExists: fs.existsSync(STORAGE_FILE),
+      file: STORAGE_FILE
+    });
   } catch (error) {
-    logGameState('SAVE_ERROR', undefined, { error: error instanceof Error ? error.message : String(error) });
+    logGameState('FILE_SAVE_ERROR', undefined, { 
+      error: error instanceof Error ? error.message : String(error),
+      file: STORAGE_FILE,
+      globalCacheUpdated: true // Still saved to global cache
+    });
   }
 };
 
