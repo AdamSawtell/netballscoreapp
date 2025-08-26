@@ -105,6 +105,46 @@ export default function Home() {
               <p className="text-sm text-gray-600 mt-3">
                 📱 Spectators can scan this QR code to watch live scores
               </p>
+              
+              {/* QR Code Sharing Buttons */}
+              {qrCodeUrl && (
+                <div className="flex gap-2 justify-center mt-3">
+                  <button
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.download = `netball-game-qr.png`;
+                      link.href = qrCodeUrl;
+                      link.click();
+                    }}
+                    className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
+                  >
+                    📥 Download QR
+                  </button>
+                  
+                  {navigator.share && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const response = await fetch(qrCodeUrl);
+                          const blob = await response.blob();
+                          const file = new File([blob], `netball-qr.png`, { type: 'image/png' });
+                          
+                          await navigator.share({
+                            title: `Netball Game: ${teamA} vs ${teamB}`,
+                            text: 'Scan QR code to watch live netball scores!',
+                            files: [file]
+                          });
+                        } catch (err) {
+                          console.log('Sharing failed:', err);
+                        }
+                      }}
+                      className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
+                    >
+                      📤 Share QR
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

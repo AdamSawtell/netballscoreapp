@@ -6,6 +6,7 @@ export interface Game {
   scoreB: number;
   currentQuarter: number;
   timeRemaining: number; // in seconds
+  quarterLength: number; // in minutes - for display purposes
   status: 'scheduled' | 'live' | 'break' | 'finished';
   isRunning: boolean;
   createdAt: Date;

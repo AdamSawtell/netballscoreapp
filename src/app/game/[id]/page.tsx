@@ -243,7 +243,7 @@ export default function GameViewer() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center text-sm">
             <div>
               <div className="text-gray-600">Format</div>
-              <div className="font-semibold">4 x 15 minute quarters</div>
+              <div className="font-semibold">4 x {game.quarterLength} minute quarters</div>
             </div>
             <div>
               <div className="text-gray-600">Status</div>

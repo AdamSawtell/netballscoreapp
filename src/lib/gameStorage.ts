@@ -17,6 +17,7 @@ export class GameStorage {
       scoreB: 0,
       currentQuarter: 1,
       timeRemaining: settings.quarterLength * 60, // convert minutes to seconds
+      quarterLength: settings.quarterLength, // store for display
       status: 'scheduled',
       isRunning: false,
       createdAt: new Date(),
@@ -89,7 +90,7 @@ export class GameStorage {
 
     return this.updateGame(id, {
       currentQuarter: isFinished ? game.currentQuarter : nextQuarter,
-      timeRemaining: isFinished ? 0 : DEFAULT_SETTINGS.quarterLength * 60,
+      timeRemaining: isFinished ? 0 : game.quarterLength * 60, // use game's quarter length
       status: isFinished ? 'finished' : 'scheduled',
       isRunning: false,
     });
