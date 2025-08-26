@@ -296,10 +296,15 @@ export class GameStorage {
     return result;
   }
 
-  // Helper methods for scoring
+  // Helper methods for scoring - preserves timer state during scoring
   static addScore(id: string, team: 'A' | 'B', points: number = 1): Game | null {
-    const game = this.getGame(id);
-    if (!game) return null;
+    // Get game without timer recalculation to avoid timer jumps during scoring
+    const games = loadGamesFromStorage();
+    const game = games.get(id);
+    if (!game) {
+      logGameState('ADD_SCORE_GAME_NOT_FOUND', id);
+      return null;
+    }
 
     const updates: Partial<Game> = {};
     if (team === 'A') {
@@ -308,7 +313,23 @@ export class GameStorage {
       updates.scoreB = Math.max(0, game.scoreB + points);
     }
 
-    return this.updateGame(id, updates);
+    // Update without triggering timer recalculation
+    const updatedGame = {
+      ...game,
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    games.set(id, updatedGame);
+    saveGamesToStorage(games);
+    logGameState('ADD_SCORE', id, { 
+      team, 
+      points, 
+      newScore: team === 'A' ? updatedGame.scoreA : updatedGame.scoreB,
+      timerPreserved: true
+    });
+    
+    return updatedGame;
   }
 
   // Timer management

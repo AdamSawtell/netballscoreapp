@@ -174,20 +174,8 @@ export default function AdminPanel() {
       if (!response.ok) throw new Error('Failed to update score');
       
       const { game: updatedGame } = await response.json();
-      // Preserve local timer state if running
-      setGame(currentGame => {
-        if (currentGame?.isRunning && currentGame?.status === 'live' && timerRef.current) {
-          // Keep local timer state, but update other fields from server
-          return {
-            ...updatedGame,
-            timeRemaining: currentGame.timeRemaining,
-            isRunning: currentGame.isRunning,
-            status: currentGame.status,
-          };
-        }
-        // Otherwise use server data
-        return updatedGame;
-      });
+      // Server now preserves timer state during scoring, so we can use server data directly
+      setGame(updatedGame);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update score');
     } finally {
