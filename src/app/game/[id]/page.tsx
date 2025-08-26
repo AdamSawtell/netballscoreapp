@@ -27,13 +27,13 @@ export default function GameViewer() {
         if (currentGame?.isRunning && currentGame?.status === 'live' && timerRef.current) {
           // Keep local timer state, but update scores and other fields from server
           return {
-            ...serverGame,
-            timeRemaining: currentGame.timeRemaining,
-            isRunning: currentGame.isRunning,
-            status: currentGame.status,
+            ...serverGame, // This includes updated scores
+            timeRemaining: currentGame.timeRemaining, // Preserve local timer
+            isRunning: currentGame.isRunning, // Preserve running state
+            status: currentGame.status, // Preserve status
           };
         }
-        // Otherwise use server data
+        // Otherwise use server data completely
         return serverGame;
       });
       setError('');
@@ -44,19 +44,17 @@ export default function GameViewer() {
     }
   };
 
-  // Auto-refresh game data every 5 seconds - but only when timer is NOT running locally
+  // Auto-refresh game data every 3 seconds to get score updates
   useEffect(() => {
     loadGame();
     
     const interval = setInterval(() => {
-      // Only refresh from API if timer is not running locally
-      if (!game?.isRunning || game?.status !== 'live') {
-        loadGame();
-      }
-    }, 5000);
+      // Always refresh to get score updates, but preserve timer state if running
+      loadGame();
+    }, 3000);
     
     return () => clearInterval(interval);
-  }, [gameId, game?.isRunning, game?.status]); // Include timer state
+  }, [gameId]); // Keep simple dependency
 
   // Timer management effect for viewer - only start/stop timer, don't recreate
   useEffect(() => {
