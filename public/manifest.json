@@ -1,0 +1,17 @@
+{
+  "name": "Netball Score App",
+  "short_name": "Netball Score",
+  "description": "Live netball scoring app with real-time timer and spectator viewing",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#FF6B35",
+  "icons": [
+    {
+      "src": "/netball-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

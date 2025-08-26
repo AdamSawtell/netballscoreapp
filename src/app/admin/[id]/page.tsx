@@ -314,7 +314,7 @@ export default function AdminPanel() {
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold text-gray-900">
-              🏐 Admin Panel
+              🏐 Netball Score App - Admin
             </h1>
             <div className="text-sm text-gray-500">
               Game ID: {gameId}

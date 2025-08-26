@@ -129,7 +129,7 @@ export default function Home() {
                       if (navigator.share) {
                         try {
                           await navigator.share({
-                            title: `Netball: ${teamA} vs ${teamB}`,
+                            title: `Netball Score App: ${teamA} vs ${teamB}`,
                             text: shareText
                           });
                         } catch (err) {
@@ -210,7 +210,7 @@ export default function Home() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            🏐 Netball Scorer
+            🏐 Netball Score App
           </h1>
           <p className="text-gray-600">
             Create a new game to start scoring

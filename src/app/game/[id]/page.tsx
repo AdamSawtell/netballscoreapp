@@ -136,7 +136,7 @@ export default function GameViewer() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="text-center">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-              🏐 Netball Live Score
+              🏐 Netball Score App - Live
             </h1>
             <div className={`text-lg md:text-xl font-semibold ${getStatusColor(game.status, game.isRunning)}`}>
               {getStatusDisplay(game.status, game.isRunning)}
@@ -279,7 +279,7 @@ export default function GameViewer() {
                     if (navigator.share) {
                       try {
                         await navigator.share({
-                          title: `Netball: ${game?.teamA} vs ${game?.teamB}`,
+                          title: `Netball Score App: ${game?.teamA} vs ${game?.teamB}`,
                           text: shareText
                         });
                       } catch (err) {
@@ -338,7 +338,7 @@ export default function GameViewer() {
 
         {/* Footer */}
         <div className="text-center mt-8 text-sm text-gray-500">
-          <p>Netball Live Scorer • Updates every 2 seconds</p>
+          <p>Netball Score App • Updates every 2 seconds</p>
           <p className="mt-1">Game ID: {gameId}</p>
         </div>
       </div>
