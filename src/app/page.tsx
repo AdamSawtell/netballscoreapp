@@ -77,7 +77,7 @@ export default function Home() {
 
   // If game was created successfully, show success screen
   if (gameCreated) {
-    return (
+  return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
           {/* Success Header */}
@@ -108,7 +108,7 @@ export default function Home() {
               
               {/* QR Code Sharing Buttons */}
               {qrCodeUrl && (
-                <div className="flex gap-2 justify-center mt-3">
+                <div className="flex flex-wrap gap-2 justify-center mt-3">
                   <button
                     onClick={() => {
                       const link = document.createElement('a');
@@ -121,28 +121,31 @@ export default function Home() {
                     📥 Download QR
                   </button>
                   
-                  {navigator.share && (
-                    <button
-                      onClick={async () => {
+                  <button
+                    onClick={async () => {
+                      const viewerUrl = gameLinks?.viewer || '';
+                      const shareText = `Watch live netball scores!\n${teamA} vs ${teamB}\n\n${viewerUrl}`;
+                      
+                      if (navigator.share) {
                         try {
-                          const response = await fetch(qrCodeUrl);
-                          const blob = await response.blob();
-                          const file = new File([blob], `netball-qr.png`, { type: 'image/png' });
-                          
                           await navigator.share({
-                            title: `Netball Game: ${teamA} vs ${teamB}`,
-                            text: 'Scan QR code to watch live netball scores!',
-                            files: [file]
+                            title: `Netball: ${teamA} vs ${teamB}`,
+                            text: shareText
                           });
                         } catch (err) {
-                          console.log('Sharing failed:', err);
+                          // Fallback to clipboard
+                          navigator.clipboard?.writeText(shareText);
+                          alert('Game details copied to clipboard!');
                         }
-                      }}
-                      className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
-                    >
-                      📤 Share QR
-                    </button>
-                  )}
+                      } else if (navigator.clipboard) {
+                        await navigator.clipboard.writeText(shareText);
+                        alert('Game details copied to clipboard!');
+                      }
+                    }}
+                    className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
+                  >
+                    📤 Share Game
+                  </button>
                 </div>
               )}
             </div>

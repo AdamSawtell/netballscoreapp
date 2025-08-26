@@ -154,7 +154,20 @@ export default function AdminPanel() {
       if (!response.ok) throw new Error('Failed to update score');
       
       const { game: updatedGame } = await response.json();
-      setGame(updatedGame);
+      // Preserve local timer state if running
+      setGame(currentGame => {
+        if (currentGame?.isRunning && currentGame?.status === 'live' && timerRef.current) {
+          // Keep local timer state, but update other fields from server
+          return {
+            ...updatedGame,
+            timeRemaining: currentGame.timeRemaining,
+            isRunning: currentGame.isRunning,
+            status: currentGame.status,
+          };
+        }
+        // Otherwise use server data
+        return updatedGame;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update score');
     } finally {
@@ -177,6 +190,7 @@ export default function AdminPanel() {
       if (!response.ok) throw new Error('Failed to control timer');
       
       const { game: updatedGame } = await response.json();
+      // For timer controls, always use server data (timer state is changing)
       setGame(updatedGame);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to control timer');
@@ -406,7 +420,7 @@ export default function AdminPanel() {
               </p>
               
               {/* QR Code Sharing Buttons */}
-              <div className="flex gap-2 justify-center mt-3">
+              <div className="flex flex-wrap gap-2 justify-center mt-3">
                 <button
                   onClick={() => {
                     const link = document.createElement('a');
@@ -419,33 +433,38 @@ export default function AdminPanel() {
                   📥 Download QR
                 </button>
                 
-                {navigator.share && (
-                  <button
-                    onClick={async () => {
+                <button
+                  onClick={async () => {
+                    const viewerUrl = `${window.location.origin}/game/${gameId}`;
+                    const shareText = `Watch live netball scores!\n${game?.teamA} vs ${game?.teamB}\n\n${viewerUrl}`;
+                    
+                    if (navigator.share) {
                       try {
-                        const response = await fetch(qrCodeUrl);
-                        const blob = await response.blob();
-                        const file = new File([blob], `netball-qr-${gameId}.png`, { type: 'image/png' });
-                        
                         await navigator.share({
-                          title: `Netball Game: ${game?.teamA} vs ${game?.teamB}`,
-                          text: 'Scan QR code to watch live netball scores!',
-                          files: [file]
+                          title: `Netball: ${game?.teamA} vs ${game?.teamB}`,
+                          text: shareText
                         });
                       } catch (err) {
-                        console.log('Sharing failed:', err);
+                        // Fallback to clipboard
+                        navigator.clipboard?.writeText(shareText);
+                        alert('Link copied to clipboard!');
                       }
-                    }}
-                    className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
-                  >
-                    📤 Share QR
-                  </button>
-                )}
+                    } else if (navigator.clipboard) {
+                      await navigator.clipboard.writeText(shareText);
+                      alert('Game details copied to clipboard!');
+                    }
+                  }}
+                  className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
+                >
+                  📤 Share Game
+                </button>
                 
                 <button
-                  onClick={() => {
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                      navigator.clipboard.writeText(`${window.location.origin}/game/${gameId}`);
+                  onClick={async () => {
+                    const viewerUrl = `${window.location.origin}/game/${gameId}`;
+                    if (navigator.clipboard) {
+                      await navigator.clipboard.writeText(viewerUrl);
+                      alert('Viewer link copied to clipboard!');
                     }
                   }}
                   className="bg-purple-600 text-white px-3 py-1 rounded text-xs hover:bg-purple-700"
