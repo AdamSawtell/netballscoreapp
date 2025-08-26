@@ -132,7 +132,7 @@ export default function AdminPanel() {
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-900 bg-white placeholder-gray-500"
                   placeholder="Enter admin password"
                 />
               </div>
@@ -302,7 +302,7 @@ export default function AdminPanel() {
               type="text"
               value={`${window.location.origin}/game/${gameId}`}
               readOnly
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-sm"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-sm text-gray-900"
             />
             <button
               onClick={() => navigator.clipboard.writeText(`${window.location.origin}/game/${gameId}`)}

@@ -79,7 +79,7 @@ export default function Home() {
                 id="teamA"
                 value={teamA}
                 onChange={(e) => setTeamA(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white placeholder-gray-500"
                 placeholder="Enter team name"
                 disabled={isLoading}
               />
@@ -94,7 +94,7 @@ export default function Home() {
                 id="teamB"
                 value={teamB}
                 onChange={(e) => setTeamB(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white placeholder-gray-500"
                 placeholder="Enter team name"
                 disabled={isLoading}
               />
