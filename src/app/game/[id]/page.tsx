@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Game } from '@/types/game';
+import QRCode from 'qrcode';
 
 export default function GameViewer() {
   const params = useParams();
@@ -11,6 +12,8 @@ export default function GameViewer() {
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [showShareSection, setShowShareSection] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load game data - but don't overwrite local timer if it's running
@@ -41,6 +44,24 @@ export default function GameViewer() {
       setError(err instanceof Error ? err.message : 'Failed to load game');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Generate QR code for sharing this game
+  const generateQRCode = async () => {
+    try {
+      const viewerUrl = `${window.location.origin}/game/${gameId}`;
+      const qrDataUrl = await QRCode.toDataURL(viewerUrl, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      setQrCodeUrl(qrDataUrl);
+    } catch (err) {
+      console.error('Failed to generate QR code:', err);
     }
   };
 
@@ -256,6 +277,102 @@ export default function GameViewer() {
               <div className="font-semibold text-green-600">Live • Auto-refresh</div>
             </div>
           </div>
+        </div>
+
+        {/* Share Game Section */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-900">Share this Game</h3>
+            <button
+              onClick={() => {
+                setShowShareSection(!showShareSection);
+                if (!showShareSection && !qrCodeUrl) {
+                  generateQRCode();
+                }
+              }}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm"
+            >
+              {showShareSection ? '🔼 Hide' : '📤 Share'}
+            </button>
+          </div>
+
+          {showShareSection && (
+            <div>
+              <p className="text-sm text-gray-600 mb-4">
+                Invite others to watch this live netball game!
+              </p>
+
+              {/* QR Code */}
+              {qrCodeUrl && (
+                <div className="text-center mb-4">
+                  <img 
+                    src={qrCodeUrl} 
+                    alt="QR Code to share this game" 
+                    className="mx-auto border border-gray-200 rounded-lg p-2"
+                  />
+                  <p className="text-sm text-gray-600 mt-2">
+                    📱 Scan to watch live scores
+                  </p>
+                </div>
+              )}
+
+              {/* Sharing Buttons */}
+              <div className="flex flex-wrap gap-2 justify-center">
+                {qrCodeUrl && (
+                  <button
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.download = `netball-${game?.teamA}-vs-${game?.teamB}-qr.png`;
+                      link.href = qrCodeUrl;
+                      link.click();
+                    }}
+                    className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
+                  >
+                    📥 Download QR
+                  </button>
+                )}
+                
+                <button
+                  onClick={async () => {
+                    const viewerUrl = `${window.location.origin}/game/${gameId}`;
+                    const shareText = `Watch live netball scores!\n${game?.teamA} vs ${game?.teamB}\n\n${viewerUrl}`;
+                    
+                    if (navigator.share) {
+                      try {
+                        await navigator.share({
+                          title: `Netball: ${game?.teamA} vs ${game?.teamB}`,
+                          text: shareText
+                        });
+                      } catch (err) {
+                        // Fallback to clipboard
+                        navigator.clipboard?.writeText(shareText);
+                        alert('Game details copied to clipboard!');
+                      }
+                    } else if (navigator.clipboard) {
+                      await navigator.clipboard.writeText(shareText);
+                      alert('Game details copied to clipboard!');
+                    }
+                  }}
+                  className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
+                >
+                  📤 Share Game
+                </button>
+                
+                <button
+                  onClick={async () => {
+                    const viewerUrl = `${window.location.origin}/game/${gameId}`;
+                    if (navigator.clipboard) {
+                      await navigator.clipboard.writeText(viewerUrl);
+                      alert('Game link copied to clipboard!');
+                    }
+                  }}
+                  className="bg-purple-600 text-white px-3 py-1 rounded text-xs hover:bg-purple-700"
+                >
+                  🔗 Copy Link
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Quarter Summary (if game is finished) */}
