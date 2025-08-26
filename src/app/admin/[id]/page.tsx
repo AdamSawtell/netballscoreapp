@@ -58,6 +58,38 @@ export default function AdminPanel() {
     }
   }, [isAuthenticated, gameId]);
 
+  // Timer countdown effect
+  useEffect(() => {
+    if (!game || !game.isRunning || game.status !== 'live') return;
+
+    const interval = setInterval(() => {
+      setGame(currentGame => {
+        if (!currentGame || !currentGame.isRunning || currentGame.timeRemaining <= 0) {
+          return currentGame;
+        }
+        
+        const newTimeRemaining = currentGame.timeRemaining - 1;
+        
+        // If time reaches 0, pause the game
+        if (newTimeRemaining <= 0) {
+          return {
+            ...currentGame,
+            timeRemaining: 0,
+            isRunning: false,
+            status: 'scheduled'
+          };
+        }
+        
+        return {
+          ...currentGame,
+          timeRemaining: newTimeRemaining
+        };
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [game?.isRunning, game?.status]);
+
   // Handle password authentication
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,9 +158,8 @@ export default function AdminPanel() {
   // Format game status
   const getStatusDisplay = (status: string) => {
     switch (status) {
-      case 'scheduled': return '⏰ Scheduled';
+      case 'scheduled': return '⏰ Ready';
       case 'live': return '🔴 LIVE';
-      case 'break': return '☕ Break';
       case 'finished': return '🏁 Finished';
       default: return status;
     }

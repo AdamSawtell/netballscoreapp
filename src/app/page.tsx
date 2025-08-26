@@ -7,6 +7,7 @@ import QRCode from 'qrcode';
 export default function Home() {
   const [teamA, setTeamA] = useState('');
   const [teamB, setTeamB] = useState('');
+  const [quarterLength, setQuarterLength] = useState(15); // Default 15 minutes
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [gameCreated, setGameCreated] = useState(false);
@@ -39,6 +40,9 @@ export default function Home() {
         body: JSON.stringify({
           teamA: teamA.trim(),
           teamB: teamB.trim(),
+          settings: {
+            quarterLength: quarterLength
+          }
         }),
       });
 
@@ -125,6 +129,7 @@ export default function Home() {
                 setGameCreated(false);
                 setTeamA('');
                 setTeamB('');
+                setQuarterLength(15);
                 setError('');
               }}
               className="w-full bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 font-medium"
@@ -202,6 +207,24 @@ export default function Home() {
               />
             </div>
 
+            <div>
+              <label htmlFor="quarterLength" className="block text-sm font-medium text-gray-700 mb-1">
+                Quarter Length (minutes)
+              </label>
+              <select
+                id="quarterLength"
+                value={quarterLength}
+                onChange={(e) => setQuarterLength(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
+                disabled={isLoading}
+              >
+                <option value={10}>10 minutes</option>
+                <option value={12}>12 minutes</option>
+                <option value={15}>15 minutes</option>
+                <option value={20}>20 minutes</option>
+              </select>
+            </div>
+
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">
                 {error}
@@ -221,9 +244,9 @@ export default function Home() {
           <div className="mt-6 pt-6 border-t border-gray-200">
             <h3 className="text-sm font-medium text-gray-700 mb-2">Game Settings</h3>
             <ul className="text-sm text-gray-600 space-y-1">
-              <li>• 4 quarters of 15 minutes each</li>
-              <li>• 3 minute breaks between quarters</li>
+              <li>• 4 quarters of {quarterLength} minutes each</li>
               <li>• Live scoring and timer</li>
+              <li>• Real-time updates for spectators</li>
             </ul>
           </div>
         </div>

@@ -90,7 +90,7 @@ export class GameStorage {
     return this.updateGame(id, {
       currentQuarter: isFinished ? game.currentQuarter : nextQuarter,
       timeRemaining: isFinished ? 0 : DEFAULT_SETTINGS.quarterLength * 60,
-      status: isFinished ? 'finished' : 'break',
+      status: isFinished ? 'finished' : 'scheduled',
       isRunning: false,
     });
   }

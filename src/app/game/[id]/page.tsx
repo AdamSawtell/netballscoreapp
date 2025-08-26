@@ -29,12 +29,44 @@ export default function GameViewer() {
     }
   };
 
-  // Auto-refresh game data every 2 seconds
+  // Auto-refresh game data every 5 seconds (reduced frequency)
   useEffect(() => {
     loadGame();
-    const interval = setInterval(loadGame, 2000);
+    const interval = setInterval(loadGame, 5000);
     return () => clearInterval(interval);
   }, [gameId]); // loadGame is stable, no need to include in dependencies
+
+  // Timer countdown effect for live games
+  useEffect(() => {
+    if (!game || !game.isRunning || game.status !== 'live') return;
+
+    const interval = setInterval(() => {
+      setGame(currentGame => {
+        if (!currentGame || !currentGame.isRunning || currentGame.timeRemaining <= 0) {
+          return currentGame;
+        }
+        
+        const newTimeRemaining = currentGame.timeRemaining - 1;
+        
+        // If time reaches 0, pause the game
+        if (newTimeRemaining <= 0) {
+          return {
+            ...currentGame,
+            timeRemaining: 0,
+            isRunning: false,
+            status: 'scheduled'
+          };
+        }
+        
+        return {
+          ...currentGame,
+          timeRemaining: newTimeRemaining
+        };
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [game?.isRunning, game?.status]);
 
   // Format time display
   const formatTime = (seconds: number) => {
@@ -46,9 +78,8 @@ export default function GameViewer() {
   // Format game status
   const getStatusDisplay = (status: string, isRunning: boolean) => {
     switch (status) {
-      case 'scheduled': return '⏰ Game Scheduled';
+      case 'scheduled': return '⏰ Ready to Start';
       case 'live': return isRunning ? '🔴 LIVE' : '⏸️ PAUSED';
-      case 'break': return '☕ Break Time';
       case 'finished': return '🏁 Game Finished';
       default: return status;
     }
@@ -58,7 +89,6 @@ export default function GameViewer() {
   const getStatusColor = (status: string, isRunning: boolean) => {
     switch (status) {
       case 'live': return isRunning ? 'text-red-600' : 'text-yellow-600';
-      case 'break': return 'text-orange-600';
       case 'finished': return 'text-gray-600';
       default: return 'text-blue-600';
     }
