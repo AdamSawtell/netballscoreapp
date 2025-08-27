@@ -148,6 +148,14 @@ export default function AdminPanel() {
 
   // Timer control functions using new useAdminTimer hook
   const startTimer = () => {
+    console.log('🚨 START BUTTON CLICKED!');
+    console.log('Timer state:', {
+      isRunning: timer.isRunning,
+      isExpired: timer.isExpired,
+      isGameFinished: timer.isGameFinished,
+      timeRemaining: timer.timeRemaining,
+      status: timer.status
+    });
     timer.start();
   };
 
@@ -342,7 +350,7 @@ export default function AdminPanel() {
               disabled={loading || timer.isRunning || timer.isGameFinished || timer.isExpired}
               className="bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
             >
-              ▶️ Start
+              ▶️ Start {loading || timer.isRunning || timer.isGameFinished || timer.isExpired ? '(DISABLED)' : '(ENABLED)'}
             </button>
             <button
               onClick={pauseTimer}

@@ -53,13 +53,21 @@ export class TimerManager {
    * Start the timer
    */
   start(): void {
+    console.log('🚨 TimerManager.start() called!');
+    console.log('Current state:', {
+      isRunning: this.state.isRunning,
+      timeRemaining: this.getCurrentTime(),
+      quarterLength: this.state.quarterLength,
+      totalPausedTime: this.state.totalPausedTime
+    });
+    
     if (this.state.isRunning) {
       console.warn('Timer already running');
       return;
     }
 
-    // Calculate time remaining before checking if expired
-    const timeRemaining = this.state.quarterLength - this.state.totalPausedTime;
+    // Use getCurrentTime() for accurate time remaining check
+    const timeRemaining = this.getCurrentTime();
     if (timeRemaining <= 0) {
       console.warn('Cannot start timer - no time remaining');
       return;
@@ -74,6 +82,7 @@ export class TimerManager {
       status: 'live',
     };
 
+    console.log('🚨 Timer started! New state:', this.state);
     this.emitEvent('start', now);
   }
 

@@ -52,9 +52,14 @@ describe('useTimer', () => {
   test('should start and pause timer correctly', () => {
     const { result } = renderHook(() => useTimer('test-game-2', { quarterLength: 60 }));
     
-    // Start timer
+    // Start timer and wait for state updates
     act(() => {
       result.current.start();
+    });
+    
+    // Wait for events to propagate and state to update
+    act(() => {
+      jest.advanceTimersByTime(16); // RAF callback
     });
     
     expect(result.current.isRunning).toBe(true);
@@ -63,7 +68,8 @@ describe('useTimer', () => {
     // Run for 10 seconds and advance the display update interval
     act(() => {
       jest.advanceTimersByTime(10000); // 10 seconds
-      jest.advanceTimersByTime(100); // Trigger display update
+      jest.advanceTimersByTime(16); // Trigger display update (RAF)
+      jest.advanceTimersByTime(100); // Trigger throttled update
     });
     
     expect(Math.round(result.current.timeRemaining)).toBe(50);
