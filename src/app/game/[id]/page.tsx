@@ -1,50 +1,60 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { Game } from '@/types/game';
+import { useSpectatorTimer } from '@/hooks/useTimer';
 import QRCode from 'qrcode';
+
+interface GameDisplayData {
+  id: string;
+  teamA: string;
+  teamB: string;
+  scoreA: number;
+  scoreB: number;
+  quarterLength: number;
+}
 
 export default function GameViewer() {
   const params = useParams();
   const gameId = params.id as string;
   
-  const [game, setGame] = useState<Game | null>(null);
+  const [gameData, setGameData] = useState<GameDisplayData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [showShareSection, setShowShareSection] = useState(false);
-  const [localTimeRemaining, setLocalTimeRemaining] = useState<number | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load game data - sync with server but maintain smooth local countdown
-  const loadGame = async () => {
+  // Use our new spectator timer with auto-sync
+  const timer = useSpectatorTimer(gameId, {
+    quarterLength: gameData?.quarterLength ? gameData.quarterLength * 60 : 600, // Convert minutes to seconds
+    onTimerExpired: () => {
+      console.log('Quarter ended for spectators!');
+    },
+    onQuarterEnd: () => {
+      console.log('Moving to next quarter (spectator view)');
+    },
+    onSync: (state) => {
+      console.log('Spectator synced with server:', state);
+    }
+  });
+
+  // Load game data using new TimerService API
+  const loadGame = useCallback(async () => {
     try {
-      const response = await fetch(`/api/games/${gameId}`);
+      const response = await fetch(`/api/test-timer?gameId=${gameId}`);
       if (!response.ok) {
         throw new Error('Game not found');
       }
-      const { game: serverGame } = await response.json();
+      const { game } = await response.json();
       
-      // Update game state
-      setGame(prevGame => {
-        // If timer state changed (started/stopped), sync immediately
-        if (!prevGame || prevGame.isRunning !== serverGame.isRunning || prevGame.status !== serverGame.status) {
-          setLocalTimeRemaining(serverGame.timeRemaining);
-          return serverGame;
-        }
-        
-        // If timer is running, keep local countdown smooth but update scores
-        if (serverGame.isRunning && serverGame.status === 'live') {
-          return {
-            ...serverGame,
-            timeRemaining: localTimeRemaining !== null ? localTimeRemaining : serverGame.timeRemaining
-          };
-        }
-        
-        // Otherwise use server data
-        setLocalTimeRemaining(serverGame.timeRemaining);
-        return serverGame;
+      // Extract display data (scores, teams) - timer state handled by useSpectatorTimer
+      setGameData({
+        id: game.id,
+        teamA: game.teamA,
+        teamB: game.teamB,
+        scoreA: game.scoreA,
+        scoreB: game.scoreB,
+        quarterLength: game.quarterLength
       });
       
       setError('');
@@ -53,7 +63,7 @@ export default function GameViewer() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [gameId]);
 
   // Generate QR code for sharing this game
   const generateQRCode = async () => {
@@ -73,58 +83,12 @@ export default function GameViewer() {
     }
   };
 
-  // Local timer for smooth spectator countdown
-  useEffect(() => {
-    const shouldBeRunning = game?.isRunning && game?.status === 'live' && (localTimeRemaining || 0) > 0;
-    
-    if (shouldBeRunning && !timerRef.current) {
-      // Start local countdown
-      timerRef.current = setInterval(() => {
-        setLocalTimeRemaining(prevTime => {
-          if (prevTime === null || prevTime <= 0) {
-            if (timerRef.current) {
-              clearInterval(timerRef.current);
-              timerRef.current = null;
-            }
-            return 0;
-          }
-          return prevTime - 1;
-        });
-      }, 1000);
-    } else if (!shouldBeRunning && timerRef.current) {
-      // Stop local countdown
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
 
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [game?.isRunning, game?.status, localTimeRemaining]);
 
-  // Auto-refresh game data every 3 seconds to get score updates
+  // Load game data on mount
   useEffect(() => {
     loadGame();
-    
-    const interval = setInterval(() => {
-      // Refresh to get score updates and sync timer occasionally
-      loadGame();
-    }, 3000);
-    
-    return () => clearInterval(interval);
-  }, [gameId]);
-
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, []);
+  }, [loadGame]);
 
   // Format time display
   const formatTime = (seconds: number) => {
@@ -181,7 +145,7 @@ export default function GameViewer() {
     );
   }
 
-  if (!game) {
+  if (!gameData) {
     return null;
   }
 
@@ -194,8 +158,8 @@ export default function GameViewer() {
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
               🏐 Netball Score App - Live
             </h1>
-            <div className={`text-lg md:text-xl font-semibold ${getStatusColor(game.status, game.isRunning)}`}>
-              {getStatusDisplay(game.status, game.isRunning)}
+            <div className={`text-lg md:text-xl font-semibold ${getStatusColor(timer.status, timer.isRunning)}`}>
+              {getStatusDisplay(timer.status, timer.isRunning)}
             </div>
           </div>
         </div>
@@ -209,10 +173,10 @@ export default function GameViewer() {
             {/* Team A */}
             <div className="text-center">
               <h2 className="text-lg md:text-2xl font-bold text-blue-600 mb-2 break-words">
-                {game.teamA}
+                {gameData.teamA}
               </h2>
               <div className="text-4xl md:text-6xl font-bold text-gray-900">
-                {game.scoreA}
+                {gameData.scoreA}
               </div>
             </div>
 
@@ -220,17 +184,17 @@ export default function GameViewer() {
             <div className="text-center">
               <div className="text-2xl md:text-4xl font-bold text-gray-400 mb-2">VS</div>
               <div className="text-sm text-gray-500">
-                Q{game.currentQuarter} of 4
+                Q{timer.currentQuarter} of 4
               </div>
             </div>
 
             {/* Team B */}
             <div className="text-center">
               <h2 className="text-lg md:text-2xl font-bold text-purple-600 mb-2 break-words">
-                {game.teamB}
+                {gameData.teamB}
               </h2>
               <div className="text-4xl md:text-6xl font-bold text-gray-900">
-                {game.scoreB}
+                {gameData.scoreB}
               </div>
             </div>
           </div>
@@ -239,11 +203,11 @@ export default function GameViewer() {
           <div className="text-center border-t pt-6">
             <div className="text-sm text-gray-600 mb-2">Time Remaining</div>
             <div className="text-3xl md:text-5xl font-bold text-green-600 mb-2">
-              {formatTime(localTimeRemaining !== null ? localTimeRemaining : game.timeRemaining)}
+              {formatTime(timer.timeRemaining)}
             </div>
             <div className="flex justify-center items-center space-x-2">
-              <span className="text-sm text-gray-500">Quarter {game.currentQuarter}</span>
-              {game.isRunning && (
+              <span className="text-sm text-gray-500">Quarter {timer.currentQuarter}</span>
+              {timer.isRunning && (
                 <span className="flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-red-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
@@ -259,12 +223,12 @@ export default function GameViewer() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center text-sm">
             <div>
               <div className="text-gray-600">Format</div>
-              <div className="font-semibold">4 x {game.quarterLength} minute quarters</div>
+              <div className="font-semibold">4 x {gameData.quarterLength} minute quarters</div>
             </div>
             <div>
               <div className="text-gray-600">Status</div>
-              <div className={`font-semibold ${getStatusColor(game.status, game.isRunning)}`}>
-                {getStatusDisplay(game.status, game.isRunning)}
+              <div className={`font-semibold ${getStatusColor(timer.status, timer.isRunning)}`}>
+                {getStatusDisplay(timer.status, timer.isRunning)}
               </div>
             </div>
             <div>
@@ -317,7 +281,7 @@ export default function GameViewer() {
                   <button
                     onClick={() => {
                       const link = document.createElement('a');
-                      link.download = `netball-${game?.teamA}-vs-${game?.teamB}-qr.png`;
+                      link.download = `netball-${gameData?.teamA}-vs-${gameData?.teamB}-qr.png`;
                       link.href = qrCodeUrl;
                       link.click();
                     }}
@@ -330,12 +294,12 @@ export default function GameViewer() {
                 <button
                   onClick={async () => {
                     const viewerUrl = `${window.location.origin}/game/${gameId}`;
-                    const shareText = `Watch live netball scores!\n${game?.teamA} vs ${game?.teamB}\n\n${viewerUrl}`;
+                    const shareText = `Watch live netball scores!\n${gameData?.teamA} vs ${gameData?.teamB}\n\n${viewerUrl}`;
                     
                     if (navigator.share) {
                       try {
                         await navigator.share({
-                          title: `Netball Score App: ${game?.teamA} vs ${game?.teamB}`,
+                          title: `Netball Score App: ${gameData?.teamA} vs ${gameData?.teamB}`,
                           text: shareText
                         });
                       } catch (err) {
@@ -371,21 +335,21 @@ export default function GameViewer() {
         </div>
 
         {/* Quarter Summary (if game is finished) */}
-        {game.status === 'finished' && (
+        {timer.isGameFinished && (
           <div className="bg-white rounded-xl shadow-lg p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-4 text-center">Final Result</h3>
             <div className="text-center">
-              {game.scoreA > game.scoreB ? (
+              {gameData.scoreA > gameData.scoreB ? (
                 <div className="text-xl font-bold text-blue-600">
-                  🏆 {game.teamA} wins {game.scoreA} - {game.scoreB}
+                  🏆 {gameData.teamA} wins {gameData.scoreA} - {gameData.scoreB}
                 </div>
-              ) : game.scoreB > game.scoreA ? (
+              ) : gameData.scoreB > gameData.scoreA ? (
                 <div className="text-xl font-bold text-purple-600">
-                  🏆 {game.teamB} wins {game.scoreB} - {game.scoreA}
+                  🏆 {gameData.teamB} wins {gameData.scoreB} - {gameData.scoreA}
                 </div>
               ) : (
                 <div className="text-xl font-bold text-gray-600">
-                  🤝 Draw {game.scoreA} - {game.scoreB}
+                  🤝 Draw {gameData.scoreA} - {gameData.scoreB}
                 </div>
               )}
             </div>

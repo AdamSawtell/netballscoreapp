@@ -1,11 +1,20 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { Game } from '@/types/game';
+import { useAdminTimer } from '@/hooks/useTimer';
 import QRCode from 'qrcode';
 
 const ADMIN_PASSWORD = 'netball2025';
+
+interface GameDisplayData {
+  id: string;
+  teamA: string;
+  teamB: string;
+  scoreA: number;
+  scoreB: number;
+  quarterLength: number;
+}
 
 export default function AdminPanel() {
   const params = useParams();
@@ -14,27 +23,45 @@ export default function AdminPanel() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
-  const [game, setGame] = useState<Game | null>(null);
+  const [gameData, setGameData] = useState<GameDisplayData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [qrCodeUrl, setQrCodeUrl] = useState('');
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load game data - but don't overwrite local timer if it's running
-  const loadGame = async () => {
+  // Use our new timer system
+  const timer = useAdminTimer(gameId, {
+    quarterLength: gameData?.quarterLength ? gameData.quarterLength * 60 : 600, // Convert minutes to seconds
+    onTimerExpired: () => {
+      console.log('Quarter ended!');
+      // Could show notification or auto-advance quarter
+    },
+    onQuarterEnd: () => {
+      console.log('Moving to next quarter');
+    }
+  });
+
+  // Load game data using new TimerService API
+  const loadGame = useCallback(async () => {
     try {
-      const response = await fetch(`/api/games/${gameId}`);
+      const response = await fetch(`/api/test-timer?gameId=${gameId}`);
       if (!response.ok) {
         throw new Error('Game not found');
       }
-      const { game: serverGame } = await response.json();
+      const { game } = await response.json();
       
-      // Use server time as authoritative, but allow smooth local countdown between syncs
-      setGame(serverGame);
+      // Extract display data (scores, teams) - timer state handled by useAdminTimer
+      setGameData({
+        id: game.id,
+        teamA: game.teamA,
+        teamB: game.teamB,
+        scoreA: game.scoreA,
+        scoreB: game.scoreB,
+        quarterLength: game.quarterLength
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load game');
     }
-  };
+  }, [gameId]);
 
   // Generate QR code for viewer link
   const generateQRCode = async () => {
@@ -61,91 +88,14 @@ export default function AdminPanel() {
     }
   }, [isAuthenticated, gameId]);
 
-  // Timer management effect - only start/stop timer, don't recreate
+  // Load game data when authenticated
   useEffect(() => {
-    const shouldBeRunning = game?.isRunning && game?.status === 'live' && game?.timeRemaining > 0;
-    
-    if (shouldBeRunning && !timerRef.current) {
-      // Start timer
-      timerRef.current = setInterval(() => {
-        setGame(currentGame => {
-          if (!currentGame || !currentGame.isRunning || currentGame.timeRemaining <= 0) {
-            // Clear the timer and stop the game
-            if (timerRef.current) {
-              clearInterval(timerRef.current);
-              timerRef.current = null;
-            }
-            return currentGame;
-          }
-          
-          const newTimeRemaining = currentGame.timeRemaining - 1;
-          
-          // If time reaches 0, stop the timer immediately
-          if (newTimeRemaining <= 0) {
-            // Clear the timer to prevent further ticking
-            if (timerRef.current) {
-              clearInterval(timerRef.current);
-              timerRef.current = null;
-            }
-            
-            // Update server state that timer has expired
-            fetch(`/api/games/${gameId}/timer`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'pause' }),
-            }).catch(console.error);
-            
-            return {
-              ...currentGame,
-              timeRemaining: 0,
-              isRunning: false,
-              status: 'scheduled'
-            };
-          }
-          
-          return {
-            ...currentGame,
-            timeRemaining: newTimeRemaining
-          };
-        });
-      }, 1000);
-    } else if (!shouldBeRunning && timerRef.current) {
-      // Stop timer
-      clearInterval(timerRef.current);
-      timerRef.current = null;
+    if (isAuthenticated) {
+      loadGame();
     }
+  }, [isAuthenticated, loadGame]);
 
-    // Cleanup on unmount
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [game?.isRunning, game?.status, game?.timeRemaining, gameId]); // React to timer state changes
 
-  // Periodic server sync to prevent timer drift (every 10 seconds during active game)
-  useEffect(() => {
-    if (!game?.isRunning || game?.status !== 'live' || game?.timeRemaining <= 0) return;
-
-    const syncInterval = setInterval(() => {
-      // Only sync if timer is still running and has time remaining
-      if (game?.isRunning && game?.status === 'live' && game?.timeRemaining > 0) {
-        loadGame(); // Sync with server time
-      }
-    }, 10000); // Sync every 10 seconds
-
-    return () => clearInterval(syncInterval);
-  }, [game?.isRunning, game?.status, game?.timeRemaining]);
-
-  // Cleanup timer when component unmounts
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, []);
 
   // Handle password authentication
   const handlePasswordSubmit = (e: React.FormEvent) => {
@@ -159,23 +109,35 @@ export default function AdminPanel() {
     }
   };
 
-  // Update score
+  // Update score using new TimerService API
   const updateScore = async (team: 'A' | 'B', points: number) => {
-    if (!game) return;
+    if (!gameData) return;
     
     setLoading(true);
     try {
-      const response = await fetch(`/api/games/${gameId}/score`, {
+      const response = await fetch('/api/test-timer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ team, points }),
+        body: JSON.stringify({ 
+          action: 'addScore',
+          gameId,
+          team,
+          points
+        }),
       });
       
       if (!response.ok) throw new Error('Failed to update score');
       
       const { game: updatedGame } = await response.json();
-      // Server now preserves timer state during scoring, so we can use server data directly
-      setGame(updatedGame);
+      // Update game data display (timer state automatically handled by useAdminTimer)
+      setGameData({
+        id: updatedGame.id,
+        teamA: updatedGame.teamA,
+        teamB: updatedGame.teamB,
+        scoreA: updatedGame.scoreA,
+        scoreB: updatedGame.scoreB,
+        quarterLength: updatedGame.quarterLength
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update score');
     } finally {
@@ -183,28 +145,21 @@ export default function AdminPanel() {
     }
   };
 
-  // Control timer
-  const controlTimer = async (action: string) => {
-    if (!game) return;
-    
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/games/${gameId}/timer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      });
-      
-      if (!response.ok) throw new Error('Failed to control timer');
-      
-      const { game: updatedGame } = await response.json();
-      // For timer controls, always use server data (timer state is changing)
-      setGame(updatedGame);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to control timer');
-    } finally {
-      setLoading(false);
-    }
+  // Timer control functions using new useAdminTimer hook
+  const startTimer = () => {
+    timer.start();
+  };
+
+  const pauseTimer = () => {
+    timer.pause();
+  };
+
+  const nextQuarter = () => {
+    timer.nextQuarter();
+  };
+
+  const resetTimer = () => {
+    timer.reset();
   };
 
   // Format time display
@@ -278,7 +233,7 @@ export default function AdminPanel() {
   }
 
   // If authenticated but no game loaded, show loading
-  if (!game) {
+  if (!gameData) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
@@ -312,15 +267,15 @@ export default function AdminPanel() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
             <div>
               <div className="text-lg font-semibold text-gray-700">Quarter</div>
-              <div className="text-3xl font-bold text-blue-600">Q{game.currentQuarter}</div>
+              <div className="text-3xl font-bold text-blue-600">Q{timer.currentQuarter}</div>
             </div>
             <div>
               <div className="text-lg font-semibold text-gray-700">Time</div>
-              <div className="text-3xl font-bold text-green-600">{formatTime(game.timeRemaining)}</div>
+              <div className="text-3xl font-bold text-green-600">{formatTime(timer.timeRemaining)}</div>
             </div>
             <div>
               <div className="text-lg font-semibold text-gray-700">Status</div>
-              <div className="text-lg font-bold text-orange-600">{getStatusDisplay(game.status)}</div>
+              <div className="text-lg font-bold text-orange-600">{getStatusDisplay(timer.status)}</div>
             </div>
           </div>
         </div>
@@ -329,21 +284,21 @@ export default function AdminPanel() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {/* Team A */}
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-bold text-center mb-4 text-blue-600">{game.teamA}</h2>
+            <h2 className="text-xl font-bold text-center mb-4 text-blue-600">{gameData?.teamA || 'Team A'}</h2>
             <div className="text-center mb-4">
-              <div className="text-5xl font-bold text-gray-900">{game.scoreA}</div>
+              <div className="text-5xl font-bold text-gray-900">{gameData?.scoreA || 0}</div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => updateScore('A', 1)}
-                disabled={loading || game.status === 'finished'}
+                disabled={loading || timer.isGameFinished}
                 className="bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg"
               >
                 +1 Goal
               </button>
               <button
                 onClick={() => updateScore('A', -1)}
-                disabled={loading || game.status === 'finished' || game.scoreA === 0}
+                disabled={loading || timer.isGameFinished || (gameData?.scoreA || 0) === 0}
                 className="bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg"
               >
                 -1 Goal
@@ -353,21 +308,21 @@ export default function AdminPanel() {
 
           {/* Team B */}
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-bold text-center mb-4 text-purple-600">{game.teamB}</h2>
+            <h2 className="text-xl font-bold text-center mb-4 text-purple-600">{gameData?.teamB || 'Team B'}</h2>
             <div className="text-center mb-4">
-              <div className="text-5xl font-bold text-gray-900">{game.scoreB}</div>
+              <div className="text-5xl font-bold text-gray-900">{gameData?.scoreB || 0}</div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => updateScore('B', 1)}
-                disabled={loading || game.status === 'finished'}
+                disabled={loading || timer.isGameFinished}
                 className="bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg"
               >
                 +1 Goal
               </button>
               <button
                 onClick={() => updateScore('B', -1)}
-                disabled={loading || game.status === 'finished' || game.scoreB === 0}
+                disabled={loading || timer.isGameFinished || (gameData?.scoreB || 0) === 0}
                 className="bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg"
               >
                 -1 Goal
@@ -381,32 +336,32 @@ export default function AdminPanel() {
           <h3 className="text-lg font-bold mb-4 text-center">Timer Controls</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <button
-              onClick={() => controlTimer('start')}
-              disabled={loading || game.isRunning || game.status === 'finished' || game.timeRemaining === 0}
+              onClick={startTimer}
+              disabled={loading || timer.isRunning || timer.isGameFinished || timer.isExpired}
               className="bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
             >
               ▶️ Start
             </button>
             <button
-              onClick={() => controlTimer('pause')}
-              disabled={loading || !game.isRunning || game.status === 'finished'}
+              onClick={pauseTimer}
+              disabled={loading || !timer.isRunning || timer.isGameFinished}
               className="bg-yellow-600 text-white py-3 px-4 rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
             >
               ⏸️ Pause
             </button>
             <button
-              onClick={() => controlTimer('nextQuarter')}
-              disabled={loading || game.status === 'finished' || (game.isRunning && game.timeRemaining > 0)}
+              onClick={nextQuarter}
+              disabled={loading || timer.isGameFinished || (timer.isRunning && timer.timeRemaining > 0)}
               className="bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
             >
               ⏭️ Next Quarter
             </button>
             <button
-              onClick={() => controlTimer('endGame')}
-              disabled={loading || game.status === 'finished'}
+              onClick={resetTimer}
+              disabled={loading || timer.isGameFinished}
               className="bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
             >
-              🏁 End Game
+              🔄 Reset Timer
             </button>
           </div>
         </div>
@@ -444,12 +399,12 @@ export default function AdminPanel() {
                 <button
                   onClick={async () => {
                     const viewerUrl = `${window.location.origin}/game/${gameId}`;
-                    const shareText = `Watch live netball scores!\n${game?.teamA} vs ${game?.teamB}\n\n${viewerUrl}`;
+                    const shareText = `Watch live netball scores!\n${gameData?.teamA} vs ${gameData?.teamB}\n\n${viewerUrl}`;
                     
                     if (navigator.share) {
                       try {
                         await navigator.share({
-                          title: `Netball: ${game?.teamA} vs ${game?.teamB}`,
+                          title: `Netball: ${gameData?.teamA} vs ${gameData?.teamB}`,
                           text: shareText
                         });
                       } catch (err) {
