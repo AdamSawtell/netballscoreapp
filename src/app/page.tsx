@@ -41,9 +41,7 @@ export default function Home() {
           action: 'createGame',
           teamA: teamA.trim(),
           teamB: teamB.trim(),
-          settings: {
-            quarterLength: quarterLength
-          }
+          quarterLength: quarterLength
         }),
       });
 
