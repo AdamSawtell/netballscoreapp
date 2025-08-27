@@ -41,6 +41,11 @@ export default function AdminPanel() {
     }
   });
 
+  // 🚨 DEBUG: Log timer object to console
+  console.log('🚨 TIMER HOOK OBJECT:', timer);
+  console.log('🚨 timer.start function:', timer.start);
+  console.log('🚨 timer.start type:', typeof timer.start);
+
   // Load game data using new TimerService API
   const loadGame = useCallback(async () => {
     try {
@@ -149,6 +154,8 @@ export default function AdminPanel() {
   // Timer control functions using new useAdminTimer hook
   const startTimer = () => {
     console.log('🚨 START BUTTON CLICKED!');
+    console.log('🚨 timer object in startTimer:', timer);
+    console.log('🚨 timer.start in startTimer:', timer.start);
     console.log('Timer state:', {
       isRunning: timer.isRunning,
       isExpired: timer.isExpired,
@@ -156,7 +163,14 @@ export default function AdminPanel() {
       timeRemaining: timer.timeRemaining,
       status: timer.status
     });
-    timer.start();
+    
+    if (typeof timer.start === 'function') {
+      console.log('🚨 CALLING timer.start()...');
+      timer.start();
+      console.log('🚨 timer.start() COMPLETED');
+    } else {
+      console.error('🚨 ERROR: timer.start is not a function!', typeof timer.start);
+    }
   };
 
   const pauseTimer = () => {
