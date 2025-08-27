@@ -32,12 +32,13 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/games', {
+      const response = await fetch('/api/test-timer', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          action: 'createGame',
           teamA: teamA.trim(),
           teamB: teamB.trim(),
           settings: {
@@ -51,7 +52,11 @@ export default function Home() {
         throw new Error(errorData.error || 'Failed to create game');
       }
 
-      const { links } = await response.json();
+      const { game } = await response.json();
+      const links = {
+        admin: `/admin/${game.id}`,
+        viewer: `/game/${game.id}`
+      };
       
       // Generate QR code for viewer link
       const viewerUrl = `${window.location.origin}${links.viewer}`;

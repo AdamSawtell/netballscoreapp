@@ -1,21 +1,25 @@
 import { NextResponse } from 'next/server';
-import { GameStorage } from '@/lib/gameStorage';
+import { TimerService } from '@/lib/services/TimerService';
 import fs from 'fs';
 import path from 'path';
 
 // GET /api/debug/storage - Debug storage status
 export async function GET() {
   try {
-    const storageFile = path.join('/tmp', 'netball-games.json');
-    const games = GameStorage.getAllGames();
+    const storageFile = path.join(process.cwd(), '.games-data-cache.json');
+    const timerFile = path.join(process.cwd(), '.timer-data-cache.json');
+    const games = TimerService.getAllGamesWithTimer();
     
     const debugInfo = {
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'unknown',
       storage: {
-        file: storageFile,
-        fileExists: fs.existsSync(storageFile),
-        fileSize: fs.existsSync(storageFile) ? fs.statSync(storageFile).size : 0,
+        gameFile: storageFile,
+        timerFile: timerFile,
+        gameFileExists: fs.existsSync(storageFile),
+        timerFileExists: fs.existsSync(timerFile),
+        gameFileSize: fs.existsSync(storageFile) ? fs.statSync(storageFile).size : 0,
+        timerFileSize: fs.existsSync(timerFile) ? fs.statSync(timerFile).size : 0,
         isWritable: await testWriteAccess(storageFile)
       },
       games: {
@@ -26,14 +30,22 @@ export async function GET() {
           teams: `${g.teamA} vs ${g.teamB}`,
           status: g.status,
           isRunning: g.isRunning,
+          currentQuarter: g.currentQuarter,
+          timeRemaining: g.timeRemaining,
+          isExpired: g.isExpired,
+          isGameFinished: g.isGameFinished,
           createdAt: g.createdAt,
           updatedAt: g.updatedAt
         }))
       },
-      globalCache: {
-        exists: !!(typeof global !== 'undefined' && (global as Record<string, unknown>).gameStorageCache),
-        count: typeof global !== 'undefined' && (global as Record<string, unknown>).gameStorageCache 
-          ? ((global as Record<string, unknown>).gameStorageCache as Map<string, unknown>).size 
+      newStorageSystem: {
+        gameDataCache: !!(typeof global !== 'undefined' && (global as Record<string, unknown>).gameDataCache),
+        timerDataCache: !!(typeof global !== 'undefined' && (global as Record<string, unknown>).timerDataCache),
+        gameCount: typeof global !== 'undefined' && (global as Record<string, unknown>).gameDataCache 
+          ? ((global as Record<string, unknown>).gameDataCache as Map<string, unknown>).size 
+          : 0,
+        timerCount: typeof global !== 'undefined' && (global as Record<string, unknown>).timerDataCache 
+          ? ((global as Record<string, unknown>).timerDataCache as Map<string, unknown>).size 
           : 0
       }
     };
