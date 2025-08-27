@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useAdminTimer } from '@/hooks/useTimer';
+import { TimerErrorBoundary } from '@/components/ErrorBoundary';
 import QRCode from 'qrcode';
 
 const ADMIN_PASSWORD = 'netball2025';
@@ -251,8 +252,9 @@ export default function AdminPanel() {
 
   // Main admin panel
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-4">
-      <div className="max-w-4xl mx-auto">
+    <TimerErrorBoundary>
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-4">
+        <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
@@ -463,7 +465,8 @@ export default function AdminPanel() {
             {error}
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </TimerErrorBoundary>
   );
 }

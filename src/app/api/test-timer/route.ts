@@ -5,17 +5,42 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { TimerService } from '@/lib/services/TimerService';
+import { 
+  validateAPIAction, 
+  validateCreateGameRequest, 
+  validateScoreUpdateRequest, 
+  validateTimerActionRequest,
+  formatValidationError 
+} from '@/lib/validation';
 
 export async function POST(request: NextRequest) {
   try {
-    const { action, gameId, team, points, ...data } = await request.json();
+    const requestData = await request.json();
+    const { action, gameId, team, points, ...data } = requestData;
 
-    switch (action) {
+    // Validate action first
+    const actionResult = validateAPIAction(action);
+    if (!actionResult.isValid) {
+      return NextResponse.json({ 
+        success: false, 
+        error: formatValidationError(actionResult.error!, 'action'),
+        code: 'VALIDATION_ERROR'
+      }, { status: 400 });
+    }
+
+    switch (actionResult.sanitized) {
       case 'createGame': {
-        const { teamA, teamB, quarterLength } = data;
-        const game = TimerService.createGame(teamA, teamB, {
-          quarterLength: quarterLength || 15
-        });
+        const validation = validateCreateGameRequest(data);
+        if (!validation.isValid) {
+          return NextResponse.json({ 
+            success: false, 
+            error: validation.error,
+            code: 'VALIDATION_ERROR'
+          }, { status: 400 });
+        }
+
+        const { teamA, teamB, quarterLength } = validation.sanitized!;
+        const game = TimerService.createGame(teamA, teamB, { quarterLength });
         
         return NextResponse.json({ 
           success: true, 
@@ -61,11 +86,21 @@ export async function POST(request: NextRequest) {
       }
 
       case 'updateScore': {
-        const game = TimerService.updateScore(gameId, team, points);
+        const validation = validateScoreUpdateRequest({ gameId, team, points });
+        if (!validation.isValid) {
+          return NextResponse.json({ 
+            success: false, 
+            error: validation.error,
+            code: 'VALIDATION_ERROR'
+          }, { status: 400 });
+        }
+
+        const sanitized = validation.sanitized!;
+        const game = TimerService.updateScore(sanitized.gameId, sanitized.team, sanitized.points);
         return NextResponse.json({ 
           success: true, 
           game,
-          message: `🏀 ${team === 'A' ? game?.teamA : game?.teamB} +${points}` 
+          message: `🏀 ${sanitized.team === 'A' ? game?.teamA : game?.teamB} +${sanitized.points}` 
         });
       }
 
@@ -116,11 +151,43 @@ export async function POST(request: NextRequest) {
         }, { status: 400 });
     }
   } catch (error) {
-    console.error('Test Timer API Error:', error);
+    // Log error with context
+    console.error('🚨 Test Timer API Error:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString(),
+      url: request.url,
+      method: request.method
+    });
+
+    // Determine error type and return appropriate response
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Invalid JSON in request body',
+        code: 'INVALID_JSON'
+      }, { status: 400 });
+    }
+
+    if (error instanceof Error && error.message.includes('Game not found')) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Game not found',
+        code: 'GAME_NOT_FOUND'
+      }, { status: 404 });
+    }
+
+    // Generic server error
     return NextResponse.json({ 
       success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
+      error: process.env.NODE_ENV === 'development' 
+        ? (error instanceof Error ? error.message : 'Unknown error')
+        : 'Internal server error',
+      code: 'INTERNAL_ERROR',
+      stack: process.env.NODE_ENV === 'development' 
+        ? (error instanceof Error ? error.stack : undefined)
+        : undefined,
+      timestamp: new Date().toISOString()
     }, { status: 500 });
   }
 }

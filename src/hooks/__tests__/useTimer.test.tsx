@@ -26,8 +26,8 @@ beforeAll(() => {
 afterAll(() => {
   jest.useRealTimers();
   // Restore original RAF functions
-  delete (global as any).requestAnimationFrame;
-  delete (global as any).cancelAnimationFrame;
+  delete (global as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame;
+  delete (global as unknown as { cancelAnimationFrame: unknown }).cancelAnimationFrame;
 });
 
 beforeEach(() => {
