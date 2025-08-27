@@ -3,16 +3,16 @@
  * Comprehensive input validation and sanitization
  */
 
-export interface ValidationResult {
+export interface ValidationResult<T = unknown> {
   isValid: boolean;
   error?: string;
-  sanitized?: unknown;
+  sanitized?: T;
 }
 
 /**
  * Team name validation
  */
-export function validateTeamName(name: string): ValidationResult {
+export function validateTeamName(name: unknown): ValidationResult<string> {
   if (!name || typeof name !== 'string') {
     return { isValid: false, error: 'Team name is required' };
   }
@@ -37,7 +37,7 @@ export function validateTeamName(name: string): ValidationResult {
 /**
  * Quarter length validation
  */
-export function validateQuarterLength(length: unknown): ValidationResult {
+export function validateQuarterLength(length: unknown): ValidationResult<number> {
   if (length === null || length === undefined) {
     return { isValid: false, error: 'Quarter length is required' };
   }
@@ -68,7 +68,7 @@ export function validateQuarterLength(length: unknown): ValidationResult {
 /**
  * Score validation
  */
-export function validateScore(score: unknown): ValidationResult {
+export function validateScore(score: unknown): ValidationResult<number> {
   if (score === null || score === undefined) {
     return { isValid: false, error: 'Score is required' };
   }
@@ -97,7 +97,7 @@ export function validateScore(score: unknown): ValidationResult {
 /**
  * Game ID validation
  */
-export function validateGameId(id: unknown): ValidationResult {
+export function validateGameId(id: unknown): ValidationResult<string> {
   if (!id || typeof id !== 'string') {
     return { isValid: false, error: 'Game ID is required' };
   }
@@ -120,7 +120,7 @@ export function validateGameId(id: unknown): ValidationResult {
 /**
  * Team identifier validation (A or B)
  */
-export function validateTeam(team: unknown): ValidationResult {
+export function validateTeam(team: unknown): ValidationResult<'A' | 'B'> {
   if (!team || typeof team !== 'string') {
     return { isValid: false, error: 'Team identifier is required' };
   }
@@ -131,13 +131,13 @@ export function validateTeam(team: unknown): ValidationResult {
     return { isValid: false, error: 'Team must be either A or B' };
   }
 
-  return { isValid: true, sanitized };
+  return { isValid: true, sanitized: sanitized as 'A' | 'B' };
 }
 
 /**
  * Points validation for scoring
  */
-export function validatePoints(points: unknown): ValidationResult {
+export function validatePoints(points: unknown): ValidationResult<number> {
   if (points === null || points === undefined) {
     return { isValid: false, error: 'Points value is required' };
   }
@@ -162,7 +162,7 @@ export function validatePoints(points: unknown): ValidationResult {
 /**
  * API action validation
  */
-export function validateAPIAction(action: unknown): ValidationResult {
+export function validateAPIAction(action: unknown): ValidationResult<string> {
   if (!action || typeof action !== 'string') {
     return { isValid: false, error: 'Action is required' };
   }
@@ -195,12 +195,16 @@ export function validateAPIAction(action: unknown): ValidationResult {
 /**
  * Comprehensive game creation request validation
  */
-export function validateCreateGameRequest(data: unknown): ValidationResult {
+export function validateCreateGameRequest(data: unknown): ValidationResult<{
+  teamA: string;
+  teamB: string;
+  quarterLength: number;
+}> {
   if (!data || typeof data !== 'object') {
     return { isValid: false, error: 'Game data is required' };
   }
 
-  const { teamA, teamB, quarterLength } = data;
+  const { teamA, teamB, quarterLength } = data as Record<string, unknown>;
 
   // Validate team A
   const teamAResult = validateTeamName(teamA);
@@ -228,9 +232,9 @@ export function validateCreateGameRequest(data: unknown): ValidationResult {
   return {
     isValid: true,
     sanitized: {
-      teamA: teamAResult.sanitized,
-      teamB: teamBResult.sanitized,
-      quarterLength: quarterResult.sanitized
+      teamA: teamAResult.sanitized!,
+      teamB: teamBResult.sanitized!,
+      quarterLength: quarterResult.sanitized!
     }
   };
 }
@@ -238,12 +242,16 @@ export function validateCreateGameRequest(data: unknown): ValidationResult {
 /**
  * Comprehensive score update request validation
  */
-export function validateScoreUpdateRequest(data: unknown): ValidationResult {
+export function validateScoreUpdateRequest(data: unknown): ValidationResult<{
+  gameId: string;
+  team: 'A' | 'B';
+  points: number;
+}> {
   if (!data || typeof data !== 'object') {
     return { isValid: false, error: 'Score update data is required' };
   }
 
-  const { gameId, team, points } = data;
+  const { gameId, team, points } = data as Record<string, unknown>;
 
   // Validate game ID
   const gameIdResult = validateGameId(gameId);
@@ -266,9 +274,9 @@ export function validateScoreUpdateRequest(data: unknown): ValidationResult {
   return {
     isValid: true,
     sanitized: {
-      gameId: gameIdResult.sanitized,
-      team: teamResult.sanitized,
-      points: pointsResult.sanitized
+      gameId: gameIdResult.sanitized!,
+      team: teamResult.sanitized!,
+      points: pointsResult.sanitized!
     }
   };
 }
@@ -281,7 +289,7 @@ export function validateTimerActionRequest(data: unknown): ValidationResult {
     return { isValid: false, error: 'Timer action data is required' };
   }
 
-  const { gameId, action } = data;
+  const { gameId, action } = data as Record<string, unknown>;
 
   // Validate game ID
   const gameIdResult = validateGameId(gameId);
