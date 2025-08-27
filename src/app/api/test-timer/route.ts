@@ -125,22 +125,43 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const games = TimerService.getAllGamesWithTimer();
+    const { searchParams } = new URL(request.url);
+    const gameId = searchParams.get('gameId');
     
-    return NextResponse.json({
-      success: true,
-      games,
-      count: games.length,
-      timestamp: new Date().toISOString(),
-      message: `🔍 API Health Check - ${games.length} games active`
-    });
+    if (gameId) {
+      // Get specific game
+      const game = TimerService.getGameWithTimer(gameId);
+      if (!game) {
+        return NextResponse.json({
+          success: false,
+          error: 'Game not found'
+        }, { status: 404 });
+      }
+      
+      return NextResponse.json({
+        success: true,
+        game,
+        message: `🎮 Game found: ${game.teamA} vs ${game.teamB}`
+      });
+    } else {
+      // Get all games (health check)
+      const games = TimerService.getAllGamesWithTimer();
+      
+      return NextResponse.json({
+        success: true,
+        games,
+        count: games.length,
+        timestamp: new Date().toISOString(),
+        message: `🔍 API Health Check - ${games.length} games active`
+      });
+    }
   } catch (error) {
-    console.error('Test Timer API Health Check Error:', error);
+    console.error('Test Timer API GET Error:', error);
     return NextResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Health check failed'
+      error: error instanceof Error ? error.message : 'Failed to get game data'
     }, { status: 500 });
   }
 }
