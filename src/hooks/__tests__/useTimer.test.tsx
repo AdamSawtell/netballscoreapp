@@ -6,17 +6,35 @@
 import { renderHook, act } from '@testing-library/react';
 import { useTimer, useAdminTimer, useSpectatorTimer } from '../useTimer';
 
-// Mock timers for testing
+// Mock timers and requestAnimationFrame for testing
+let mockRAF: jest.Mock;
+let mockCancelRAF: jest.Mock;
+
 beforeAll(() => {
   jest.useFakeTimers();
+  
+  // Mock requestAnimationFrame and cancelAnimationFrame
+  mockRAF = jest.fn((callback: FrameRequestCallback) => {
+    return setTimeout(() => callback(performance.now()), 16) as unknown as number; // 60fps
+  });
+  mockCancelRAF = jest.fn(clearTimeout);
+  
+  global.requestAnimationFrame = mockRAF;
+  global.cancelAnimationFrame = mockCancelRAF;
 });
 
 afterAll(() => {
   jest.useRealTimers();
+  // Restore original RAF functions
+  delete (global as any).requestAnimationFrame;
+  delete (global as any).cancelAnimationFrame;
 });
 
 beforeEach(() => {
   jest.setSystemTime(new Date('2025-01-27T10:00:00.000Z'));
+  jest.clearAllTimers();
+  mockRAF.mockClear();
+  mockCancelRAF.mockClear();
 });
 
 describe('useTimer', () => {

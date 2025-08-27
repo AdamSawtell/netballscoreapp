@@ -13,12 +13,102 @@ import { GameData, GameWithTimer, TimerPersistenceData, GameDataTransformer } fr
  */
 export class TimerService {
   private static timers = new Map<string, TimerManager>();
+  private static lastAccessed = new Map<string, number>();
+  private static cleanupInterval: NodeJS.Timeout | null = null;
+  
+  // Memory management constants
+  private static readonly TIMER_TTL = 2 * 60 * 60 * 1000; // 2 hours
+  private static readonly CLEANUP_INTERVAL = 30 * 60 * 1000; // 30 minutes
+  private static readonly MAX_TIMER_INSTANCES = 100; // Safety limit
+  
+  // Serverless persistence constants
+  private static readonly AUTO_SAVE_INTERVAL = 30 * 1000; // 30 seconds
+  private static autoSaveInterval: NodeJS.Timeout | null = null;
 
   /**
    * Initialize or get existing timer for a game
    */
+  /**
+   * Initialize automatic cleanup and persistence systems
+   */
+  private static initializeCleanup(): void {
+    if (!this.cleanupInterval) {
+      this.cleanupInterval = setInterval(() => {
+        this.performAutomaticCleanup();
+      }, this.CLEANUP_INTERVAL);
+      
+      console.log('🧹 TimerService: Automatic cleanup initialized');
+    }
+    
+    // Initialize auto-save for serverless environments
+    if (!this.autoSaveInterval) {
+      this.autoSaveInterval = setInterval(() => {
+        this.performAutoSave();
+      }, this.AUTO_SAVE_INTERVAL);
+      
+      console.log('💾 TimerService: Auto-save initialized (30s interval)');
+    }
+  }
+
+  /**
+   * Aggressive auto-save for serverless persistence
+   */
+  private static performAutoSave(): void {
+    if (this.timers.size === 0) return;
+    
+    try {
+      this.saveAllTimerStates();
+      console.log(`💾 TimerService: Auto-saved ${this.timers.size} timer states`);
+    } catch (error) {
+      console.error('🚨 TimerService: Auto-save failed:', error);
+    }
+  }
+
+  /**
+   * Perform automatic cleanup of stale timers
+   */
+  private static performAutomaticCleanup(): void {
+    const now = Date.now();
+    const staleTimers: string[] = [];
+    
+    // Find stale timers based on TTL
+    for (const [gameId, lastAccess] of this.lastAccessed.entries()) {
+      if (now - lastAccess > this.TIMER_TTL) {
+        staleTimers.push(gameId);
+      }
+    }
+    
+    // Remove stale timers
+    for (const gameId of staleTimers) {
+      this.timers.delete(gameId);
+      this.lastAccessed.delete(gameId);
+      console.log(`🧹 TimerService: Cleaned up stale timer ${gameId}`);
+    }
+    
+    // Safety check: if we have too many instances, clean up the oldest
+    if (this.timers.size > this.MAX_TIMER_INSTANCES) {
+      const sortedByAccess = Array.from(this.lastAccessed.entries())
+        .sort((a, b) => a[1] - b[1]) // Sort by last accessed time
+        .slice(0, this.timers.size - this.MAX_TIMER_INSTANCES);
+      
+      for (const [gameId] of sortedByAccess) {
+        this.timers.delete(gameId);
+        this.lastAccessed.delete(gameId);
+        console.log(`🧹 TimerService: Cleaned up excess timer ${gameId}`);
+      }
+    }
+    
+    console.log(`🧹 TimerService: Cleanup complete. Active timers: ${this.timers.size}`);
+  }
+
   private static getOrCreateTimer(gameData: GameData): TimerManager {
     const gameId = gameData.id;
+    
+    // Initialize cleanup system on first use
+    this.initializeCleanup();
+    
+    // Update access time
+    this.lastAccessed.set(gameId, Date.now());
     
     if (this.timers.has(gameId)) {
       return this.timers.get(gameId)!;
@@ -108,6 +198,9 @@ export class TimerService {
     if (!gameData) {
       return null;
     }
+
+    // Update access time for memory management
+    this.lastAccessed.set(gameId, Date.now());
 
     const timer = this.getOrCreateTimer(gameData);
     const timerState = timer.getState();
@@ -293,5 +386,67 @@ export class TimerService {
       this.saveTimerState(gameId, timer.getState());
     }
     console.log(`💾 Saved ${this.timers.size} timer states`);
+  }
+
+  /**
+   * Graceful shutdown - save all states and cleanup
+   */
+  static shutdown(): void {
+    console.log('🔄 TimerService: Starting graceful shutdown...');
+    
+    // Save all timer states
+    this.saveAllTimerStates();
+    
+    // Clear cleanup interval
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    
+    // Clear auto-save interval
+    if (this.autoSaveInterval) {
+      clearInterval(this.autoSaveInterval);
+      this.autoSaveInterval = null;
+    }
+    
+    // Clear all timers
+    this.timers.clear();
+    this.lastAccessed.clear();
+    
+    console.log('✅ TimerService: Graceful shutdown complete');
+  }
+
+  /**
+   * Get memory usage statistics
+   */
+  static getMemoryStats(): {
+    activeTimers: number;
+    oldestAccess: string | null;
+    newestAccess: string | null;
+    memoryPressure: 'low' | 'medium' | 'high';
+  } {
+    const now = Date.now();
+    const accessTimes = Array.from(this.lastAccessed.values());
+    
+    const oldestAccess = accessTimes.length > 0 
+      ? new Date(Math.min(...accessTimes)).toISOString()
+      : null;
+    const newestAccess = accessTimes.length > 0
+      ? new Date(Math.max(...accessTimes)).toISOString() 
+      : null;
+    
+    let memoryPressure: 'low' | 'medium' | 'high' = 'low';
+    if (this.timers.size > this.MAX_TIMER_INSTANCES * 0.8) {
+      memoryPressure = 'high';
+    } else if (this.timers.size > this.MAX_TIMER_INSTANCES * 0.5) {
+      memoryPressure = 'medium';
+    }
+    
+    return {
+      activeTimers: this.timers.size,
+      oldestAccess,
+      newestAccess,
+      memoryPressure
+    };
   }
 }

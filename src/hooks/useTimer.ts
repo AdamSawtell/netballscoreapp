@@ -102,42 +102,66 @@ export function useTimer(gameId: string, config: UseTimerConfig = {}): UseTimerR
     }
   }, [gameId, timerConfig, onTimerExpired, onQuarterEnd, onSync]);
 
-  // Auto-sync with server and update timer display
+  // Smooth timer display updates using requestAnimationFrame  
   useEffect(() => {
-    let updateIntervalRef: NodeJS.Timeout | null = null;
+    let animationFrameId: number | null = null;
+    let lastUpdateTime = 0;
+    const UPDATE_THROTTLE = 100; // Update every 100ms for smooth countdown
     
-    if (timerRef.current) {
-      // Always update the display for running timers (every 100ms for smooth countdown)
-      if (isRunning) {
-        updateIntervalRef = setInterval(() => {
-          setTimeRemaining(timerRef.current!.getCurrentTime());
+    const updateDisplay = (timestamp: number) => {
+      if (timerRef.current && isRunning) {
+        // Throttle updates to avoid excessive renders
+        if (timestamp - lastUpdateTime >= UPDATE_THROTTLE) {
+          const currentTime = timerRef.current.getCurrentTime();
+          setTimeRemaining(currentTime);
+          lastUpdateTime = timestamp;
           
-          // Check for timer expiration
-          if (timerRef.current!.isExpired() && onTimerExpired) {
+          // Check for timer expiration (only if not handled by events)
+          if (timerRef.current.isExpired() && onTimerExpired) {
             onTimerExpired();
           }
-        }, 100);
+        }
+        
+        // Continue animation loop if timer is still running
+        animationFrameId = requestAnimationFrame(updateDisplay);
       }
-      
-      // Additional server sync for remote updates (if enabled)
-      if (autoSync) {
-        syncIntervalRef.current = setInterval(() => {
-          // This would typically fetch from server
-          setTimeRemaining(timerRef.current!.getCurrentTime());
-        }, syncInterval);
-      }
+    };
+    
+    if (isRunning && timerRef.current) {
+      animationFrameId = requestAnimationFrame(updateDisplay);
     }
 
     return () => {
-      if (updateIntervalRef) {
-        clearInterval(updateIntervalRef);
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
       }
+    };
+  }, [isRunning, onTimerExpired]);
+
+  // Server sync for spectator views (separate from display updates)
+  useEffect(() => {
+    if (!autoSync || !timerRef.current) return;
+    
+    const syncWithServer = async () => {
+      // This would fetch from server and sync state
+      // For now, just ensure local state is current
+      const currentTime = timerRef.current!.getCurrentTime();
+      setTimeRemaining(currentTime);
+      
+      if (onSync) {
+        onSync(timerRef.current!.getState());
+      }
+    };
+    
+    syncIntervalRef.current = setInterval(syncWithServer, syncInterval);
+
+    return () => {
       if (syncIntervalRef.current) {
         clearInterval(syncIntervalRef.current);
         syncIntervalRef.current = null;
       }
     };
-  }, [autoSync, syncInterval, isRunning, onTimerExpired]);
+  }, [autoSync, syncInterval, onSync]);
 
   // Timer actions
   const start = useCallback(() => {

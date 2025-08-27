@@ -15,17 +15,18 @@ interface StorageConfig {
   cacheTimeout: number; // in milliseconds
 }
 
-// Default storage paths
+// Enhanced serverless storage configuration
 const getStorageConfig = (): StorageConfig => {
   const isProduction = process.env.NODE_ENV === 'production' || 
                       process.env.VERCEL || 
                       process.env.AWS_LAMBDA_FUNCTION_NAME;
   
   if (isProduction) {
+    // Serverless environment - aggressive persistence
     return {
       gameDataFile: '/tmp/netball-games-data.json',
       timerDataFile: '/tmp/netball-timer-data.json',
-      cacheTimeout: 5 * 60 * 1000, // 5 minutes
+      cacheTimeout: 2 * 60 * 1000, // 2 minutes (shorter for serverless)
     };
   }
 
@@ -81,18 +82,49 @@ export class GameDataStorage {
     return [];
   }
 
-  private static saveToFile(filePath: string, data: unknown[]): void {
-    try {
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-      logStorageOperation('save_file_success', 'game', undefined, {
-        filePath,
-        count: data.length
-      });
-    } catch (error) {
-      logStorageOperation('save_file_error', 'game', undefined, {
-        filePath,
-        error: error instanceof Error ? error.message : String(error)
-      });
+  private static saveToFile(filePath: string, data: unknown[], retries = 3): void {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        // Ensure directory exists
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        
+        // Atomic write using temporary file
+        const tempFile = `${filePath}.tmp.${Date.now()}`;
+        fs.writeFileSync(tempFile, JSON.stringify(data, null, 2));
+        fs.renameSync(tempFile, filePath);
+        
+        logStorageOperation('save_file_success', 'game', undefined, {
+          filePath,
+          count: data.length,
+          attempt
+        });
+        return; // Success, exit retry loop
+        
+      } catch (error) {
+        const isLastAttempt = attempt === retries;
+        logStorageOperation(
+          isLastAttempt ? 'save_file_error' : 'save_file_retry', 
+          'game', 
+          undefined, 
+          {
+            filePath,
+            error: error instanceof Error ? error.message : String(error),
+            attempt,
+            maxRetries: retries
+          }
+        );
+        
+        if (isLastAttempt) {
+          console.error(`🚨 Failed to save ${filePath} after ${retries} attempts:`, error);
+        } else {
+          // Wait before retry (exponential backoff)
+          const delay = Math.pow(2, attempt - 1) * 100; // 100ms, 200ms, 400ms
+          // In serverless, we can't use setTimeout, so just continue
+        }
+      }
     }
   }
 
