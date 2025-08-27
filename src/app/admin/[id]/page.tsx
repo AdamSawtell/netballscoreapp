@@ -363,6 +363,7 @@ export default function AdminPanel() {
               onClick={startTimer}
               disabled={loading || timer.isRunning || timer.isGameFinished || timer.isExpired}
               className="bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
+              data-testid="start-button"
             >
               ▶️ Start {loading || timer.isRunning || timer.isGameFinished || timer.isExpired ? '(DISABLED)' : '(ENABLED)'}
             </button>

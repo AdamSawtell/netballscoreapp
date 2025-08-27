@@ -9,7 +9,13 @@
     "lint": "eslint",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "test:integration": "jest tests/integration",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:critical": "playwright test tests/e2e/critical-workflows.test.js",
+    "test:all": "npm run test && npm run test:integration && npm run test:critical",
+    "deploy:safe": "npm run test:all && npm run build && git push origin master"
   },
   "dependencies": {
     "@types/qrcode": "^1.5.5",
@@ -22,6 +28,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.55.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
