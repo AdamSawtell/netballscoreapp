@@ -126,16 +126,16 @@ export class TimerService {
         totalQuarters: gameData.settings.totalQuarters,
       });
       
-      // Sync with persisted state
+      // Sync with persisted state - but ensure timer starts in stopped state
       timer.syncWithState({
-        isRunning: persistedTimer.isRunning,
-        startedAt: persistedTimer.startedAt,
+        isRunning: false, // FORCE TIMER TO BE STOPPED ON LOAD
+        startedAt: null,  // CLEAR ANY PREVIOUS START TIME
         pausedAt: persistedTimer.pausedAt,
         totalPausedTime: persistedTimer.totalPausedTime,
         quarterLength: persistedTimer.quarterLength,
         currentQuarter: persistedTimer.currentQuarter,
         gameId: persistedTimer.gameId,
-        status: persistedTimer.status,
+        status: persistedTimer.status === 'live' ? 'scheduled' : persistedTimer.status, // RESET LIVE STATUS
       });
       
       console.log(`🔄 Restored timer for game ${gameId} from persistence`);
