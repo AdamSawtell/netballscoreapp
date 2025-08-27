@@ -5,7 +5,7 @@
  * Validates new TimerService + useTimer architecture
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAdminTimer } from '@/hooks/useTimer';
 
 interface TestGame {
@@ -37,11 +37,14 @@ export default function TestTimerPage() {
   const [allGames, setAllGames] = useState<TestGame[]>([]);
 
   // Use our new useTimer hook
-  const timer = useAdminTimer(gameId, {
+  const timer = useAdminTimer(gameId || 'dummy', {
     quarterLength: 5, // 5 minutes for quick testing
     onTimerExpired: () => addLog('🔔 Timer expired!'),
     onQuarterEnd: () => addLog('🏁 Quarter ended!'),
   });
+
+  // Get current game data for display
+  const currentGame = allGames.find(g => g.id === gameId);
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -54,7 +57,7 @@ export default function TestTimerPage() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const callApi = async (action: string, data: any = {}) => {
+  const callApi = useCallback(async (action: string, data: Record<string, unknown> = {}) => {
     setIsLoading(true);
     try {
       const response = await fetch('/api/test-timer', {
@@ -82,18 +85,18 @@ export default function TestTimerPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [gameId]);
 
-  const loadAllGames = async () => {
+  const loadAllGames = useCallback(async () => {
     const result = await callApi('getAllGames');
     if (result.success && result.games) {
       setAllGames(result.games);
     }
-  };
+  }, [callApi]);
 
   useEffect(() => {
     loadAllGames();
-  }, []);
+  }, [loadAllGames]);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
@@ -111,10 +114,10 @@ export default function TestTimerPage() {
               <div className="space-y-4">
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <div className="text-lg font-semibold mb-2">
-                    {timer.fullState.teamA || 'Team A'} vs {timer.fullState.teamB || 'Team B'}
+                    {currentGame?.teamA || 'Team A'} vs {currentGame?.teamB || 'Team B'}
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>Score: {timer.fullState.scoreA || 0} - {timer.fullState.scoreB || 0}</div>
+                    <div>Score: {currentGame?.scoreA || 0} - {currentGame?.scoreB || 0}</div>
                     <div>Quarter: {timer.currentQuarter}/4</div>
                     <div>Status: {timer.status}</div>
                     <div>Running: {timer.isRunning ? '▶️' : '⏸️'}</div>
@@ -167,14 +170,14 @@ export default function TestTimerPage() {
                     disabled={isLoading}
                     className="px-4 py-2 bg-red-500 text-white rounded disabled:bg-gray-300"
                   >
-                    +1 {timer.fullState.teamA || 'Team A'}
+                    +1 {currentGame?.teamA || 'Team A'}
                   </button>
                   <button
                     onClick={() => callApi('updateScore', { team: 'B', points: 1 })}
                     disabled={isLoading}
                     className="px-4 py-2 bg-purple-500 text-white rounded disabled:bg-gray-300"
                   >
-                    +1 {timer.fullState.teamB || 'Team B'}
+                    +1 {currentGame?.teamB || 'Team B'}
                   </button>
                 </div>
               </div>

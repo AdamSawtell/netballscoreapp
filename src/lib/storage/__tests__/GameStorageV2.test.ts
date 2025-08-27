@@ -4,7 +4,7 @@
  */
 
 import { GameDataStorage, TimerDataStorage } from '../GameStorageV2';
-import { GameData, TimerPersistenceData } from '@/types/game-v2';
+import { TimerPersistenceData } from '@/types/game-v2';
 import fs from 'fs';
 
 // Mock fs for testing

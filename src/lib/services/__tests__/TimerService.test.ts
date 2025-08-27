@@ -6,6 +6,7 @@
 import { TimerService } from '../TimerService';
 import { GameDataStorage, TimerDataStorage } from '../../storage/GameStorageV2';
 import { GameData, TimerPersistenceData } from '@/types/game-v2';
+import { TimerManager } from '../../timer/TimerManager';
 
 // Mock the storage layers
 jest.mock('../../storage/GameStorageV2');
@@ -303,7 +304,7 @@ describe('TimerService', () => {
 
       // Create timers for multiple games
       TimerService.getGameWithTimer('game-1');
-      TimerService['timers'].set('game-2', {} as any); // Add non-existent game timer
+      TimerService['timers'].set('game-2', {} as TimerManager); // Add non-existent game timer
 
       expect(TimerService['timers'].size).toBe(2);
 

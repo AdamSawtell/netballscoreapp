@@ -66,7 +66,7 @@ declare global {
  * Pure Game Data Storage - No timer logic
  */
 export class GameDataStorage {
-  private static loadFromFile(filePath: string): any[] {
+  private static loadFromFile(filePath: string): unknown[] {
     try {
       if (fs.existsSync(filePath)) {
         const data = fs.readFileSync(filePath, 'utf-8');
@@ -81,7 +81,7 @@ export class GameDataStorage {
     return [];
   }
 
-  private static saveToFile(filePath: string, data: any[]): void {
+  private static saveToFile(filePath: string, data: unknown[]): void {
     try {
       fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
       logStorageOperation('save_file_success', 'game', undefined, {
@@ -115,11 +115,12 @@ export class GameDataStorage {
 
     // Load from file
     const gameArray = this.loadFromFile(STORAGE_CONFIG.gameDataFile);
-    gameArray.forEach((gameData: any) => {
+    gameArray.forEach((item: unknown) => {
+      const gameData = item as Record<string, unknown>;
       // Convert date strings back to Date objects
-      gameData.createdAt = new Date(gameData.createdAt);
-      gameData.updatedAt = new Date(gameData.updatedAt);
-      games.set(gameData.id, gameData as GameData);
+      gameData.createdAt = new Date(gameData.createdAt as string);
+      gameData.updatedAt = new Date(gameData.updatedAt as string);
+      games.set(gameData.id as string, gameData as unknown as GameData);
     });
 
     // Update global cache
@@ -302,11 +303,11 @@ export class GameDataStorage {
  * Timer Data Storage - Separate from game data
  */
 export class TimerDataStorage {
-  private static loadFromFile(): any[] {
+  private static loadFromFile(): unknown[] {
     return GameDataStorage['loadFromFile'](STORAGE_CONFIG.timerDataFile);
   }
 
-  private static saveToFile(data: any[]): void {
+  private static saveToFile(data: unknown[]): void {
     GameDataStorage['saveToFile'](STORAGE_CONFIG.timerDataFile, data);
   }
 
@@ -329,17 +330,18 @@ export class TimerDataStorage {
 
     // Load from file
     const timerArray = this.loadFromFile();
-    timerArray.forEach((timerData: any) => {
+    timerArray.forEach((item: unknown) => {
+      const timerData = item as Record<string, unknown>;
       // Convert date strings back to Date objects
-      timerData.createdAt = new Date(timerData.createdAt);
-      timerData.updatedAt = new Date(timerData.updatedAt);
+      timerData.createdAt = new Date(timerData.createdAt as string);
+      timerData.updatedAt = new Date(timerData.updatedAt as string);
       if (timerData.startedAt) {
-        timerData.startedAt = new Date(timerData.startedAt);
+        timerData.startedAt = new Date(timerData.startedAt as string);
       }
       if (timerData.pausedAt) {
-        timerData.pausedAt = new Date(timerData.pausedAt);
+        timerData.pausedAt = new Date(timerData.pausedAt as string);
       }
-      timers.set(timerData.gameId, timerData as TimerPersistenceData);
+      timers.set(timerData.gameId as string, timerData as unknown as TimerPersistenceData);
     });
 
     // Update global cache

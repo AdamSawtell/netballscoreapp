@@ -208,7 +208,7 @@ export class TimerService {
   /**
    * Create new game with timer
    */
-  static createGame(teamA: string, teamB: string, settings?: any): GameWithTimer {
+  static createGame(teamA: string, teamB: string, settings?: Record<string, unknown>): GameWithTimer {
     const gameData = GameDataStorage.createGame({
       teamA,
       teamB,
@@ -282,8 +282,7 @@ export class TimerService {
       this.getOrCreateTimer(gameData);
     }
 
-    const timer = this.timers.get(gameId);
-    return timer ? timer.getState() : null;
+          return this.timers.get(gameId)?.getState() || null;
   }
 
   /**
